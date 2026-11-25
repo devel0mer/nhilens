@@ -30,9 +30,31 @@
 
 ## Installation
 
+### Homebrew (macOS & Linux)
+```bash
+brew install devel0mer/tap/nhilens
+```
+
+### Scoop (Windows)
+```powershell
+scoop bucket add devel0mer https://github.com/devel0mer/scoop-bucket
+scoop install devel0mer/nhilens
+```
+
 ### Via `go install` (Go 1.26+)
 ```bash
 CGO_ENABLED=0 go install github.com/devel0mer/nhilens/cmd/nhilens@latest
+```
+
+### Docker (GHCR — Distroless, Non-Root, Multi-Arch)
+```bash
+docker run --rm -v ~/.aws:/home/nonroot/.aws:ro ghcr.io/devel0mer/nhilens:latest version
+```
+
+Or build locally:
+```bash
+docker build -t nhilens:local .
+docker run --rm -v ~/.aws:/home/nonroot/.aws:ro nhilens:local version
 ```
 
 ### Pre-built Binaries (GitHub Releases + Cosign Verification)
@@ -45,12 +67,6 @@ cosign verify-blob \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   checksums.txt
 sha256sum -c checksums.txt --ignore-missing
-```
-
-### Docker (Distroless, Non-Root)
-```bash
-docker build -t nhilens:local .
-docker run --rm -v ~/.aws:/home/nonroot/.aws:ro nhilens:local version
 ```
 
 ### Build from Source

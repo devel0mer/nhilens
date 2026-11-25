@@ -15,5 +15,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
     -o /out/nhilens ./cmd/nhilens
 
 FROM gcr.io/distroless/static-debian12:nonroot
+LABEL org.opencontainers.image.source="https://github.com/devel0mer/nhilens" \
+      org.opencontainers.image.description="Strictly read-only Go CLI to audit AWS non-human identities (NHI) and AI agents" \
+      org.opencontainers.image.licenses="Apache-2.0"
 COPY --from=builder /out/nhilens /usr/local/bin/nhilens
 ENTRYPOINT ["/usr/local/bin/nhilens"]

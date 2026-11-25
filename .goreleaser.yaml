@@ -63,19 +63,36 @@ signs:
       - "--yes"
     artifacts: checksum
 
-# Optional Homebrew Tap (uncomment once github.com/devel0mer/homebrew-tap is created
-# and HOMEBREW_TAP_GITHUB_TOKEN is configured in GitHub Secrets):
-# brews:
-#   - name: nhilens
-#     repository:
-#       owner: devel0mer
-#       name: homebrew-tap
-#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-#     homepage: https://github.com/devel0mer/nhilens
-#     description: "Read-only AWS non-human identity & AI agent auditor"
-#     license: Apache-2.0
-#     test: |
-#       system "#{bin}/nhilens", "version"
+# Homebrew Tap (github.com/devel0mer/homebrew-tap).
+# Automatically commits Formula/nhilens.rb when TAP_GITHUB_TOKEN is set in GitHub Actions secrets;
+# otherwise generates the formula locally without failing the release.
+brews:
+  - name: nhilens
+    directory: Formula
+    repository:
+      owner: devel0mer
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    skip_upload: "{{ if .Env.TAP_GITHUB_TOKEN }}false{{ else }}true{{ end }}"
+    homepage: https://github.com/devel0mer/nhilens
+    description: "Strictly read-only Go CLI to audit AWS non-human identities (NHI) and AI agents"
+    license: Apache-2.0
+    test: |
+      assert_match "nhilens #{version}", shell_output("#{bin}/nhilens version")
+
+# Scoop Bucket for Windows (github.com/devel0mer/scoop-bucket).
+# Automatically commits bucket/nhilens.json when TAP_GITHUB_TOKEN is set in GitHub Actions secrets.
+scoops:
+  - name: nhilens
+    directory: bucket
+    repository:
+      owner: devel0mer
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    skip_upload: "{{ if .Env.TAP_GITHUB_TOKEN }}false{{ else }}true{{ end }}"
+    homepage: https://github.com/devel0mer/nhilens
+    description: "Strictly read-only Go CLI to audit AWS non-human identities (NHI) and AI agents"
+    license: Apache-2.0
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
