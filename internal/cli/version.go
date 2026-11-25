@@ -12,8 +12,9 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print nhilens version information",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, _ []string) {
-			fmt.Fprintln(cmd.OutOrStdout(), version.String())
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), version.String())
+			return err
 		},
 	}
 }
