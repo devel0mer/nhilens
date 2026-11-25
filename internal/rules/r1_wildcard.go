@@ -269,25 +269,3 @@ func collectConditionKeys(conditions map[string]map[string][]string) []string {
 	sort.Strings(out)
 	return out
 }
-
-func hasConditionKey(conditions map[string]map[string][]string, targetKey string) bool {
-	want := strings.ToLower(strings.TrimSpace(targetKey))
-	for op, inner := range conditions {
-		lowerOp := strings.ToLower(op)
-		if strings.Contains(lowerOp, "not") || lowerOp == "null" {
-			continue
-		}
-		for k, vals := range inner {
-			if strings.ToLower(strings.TrimSpace(k)) != want {
-				continue
-			}
-			for _, v := range vals {
-				tv := strings.TrimSpace(v)
-				if tv != "" && tv != "*" {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
