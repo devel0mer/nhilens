@@ -93,7 +93,7 @@ func parsePrincipalBlock(raw json.RawMessage, actions []string, conditions map[s
 	for key, valRaw := range block {
 		values, err := parseStringOrSlice(valRaw)
 		if err != nil {
-			return nil, fmt.Errorf("Principal.%s: %w", key, err)
+			return nil, fmt.Errorf("principal.%s: %w", key, err)
 		}
 		for _, val := range values {
 			v := strings.TrimSpace(val)

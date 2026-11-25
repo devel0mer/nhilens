@@ -48,12 +48,12 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 		sevCounts[model.SeverityLow] +
 		sevCounts[model.SeverityInfo]
 
-	fmt.Fprintf(w, "nhilens scan summary\n")
-	fmt.Fprintf(w, "  Account:    %s (region: %s)\n", run.AccountID, run.Region)
-	fmt.Fprintf(w, "  Scan ID:    %s\n", run.ID)
-	fmt.Fprintf(w, "  Identities: %d total (%d roles, %d users, %d keys; %d likely AI agent, %d automation/possible; %d service-linked)\n",
+	_, _ = fmt.Fprintf(w, "nhilens scan summary\n")
+	_, _ = fmt.Fprintf(w, "  Account:    %s (region: %s)\n", run.AccountID, run.Region)
+	_, _ = fmt.Fprintf(w, "  Scan ID:    %s\n", run.ID)
+	_, _ = fmt.Fprintf(w, "  Identities: %d total (%d roles, %d users, %d keys; %d likely AI agent, %d automation/possible; %d service-linked)\n",
 		len(run.Identities), roles, users, keys, likely, possible, slrs)
-	fmt.Fprintf(w, "  Findings:   %d total (critical: %d, high: %d, medium: %d, low: %d)\n",
+	_, _ = fmt.Fprintf(w, "  Findings:   %d total (critical: %d, high: %d, medium: %d, low: %d)\n",
 		totalFindings,
 		sevCounts[model.SeverityCritical],
 		sevCounts[model.SeverityHigh],
@@ -61,26 +61,26 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 		sevCounts[model.SeverityLow],
 	)
 	if run.SuppressedFindingCount > 0 {
-		fmt.Fprintf(w, "  Suppressed: %d finding(s) via baseline ignore file\n", run.SuppressedFindingCount)
+		_, _ = fmt.Fprintf(w, "  Suppressed: %d finding(s) via baseline ignore file\n", run.SuppressedFindingCount)
 	}
 	if run.CloudTrailEventCount > 0 {
-		fmt.Fprintf(w, "  CloudTrail: %s (%d events analyzed)\n", run.CloudTrailStatus, run.CloudTrailEventCount)
+		_, _ = fmt.Fprintf(w, "  CloudTrail: %s (%d events analyzed)\n", run.CloudTrailStatus, run.CloudTrailEventCount)
 	} else {
-		fmt.Fprintf(w, "  CloudTrail: %s\n", run.CloudTrailStatus)
+		_, _ = fmt.Fprintf(w, "  CloudTrail: %s\n", run.CloudTrailStatus)
 	}
 	if dbPath != "" {
-		fmt.Fprintf(w, "  Saved DB:   %s\n", dbPath)
+		_, _ = fmt.Fprintf(w, "  Saved DB:   %s\n", dbPath)
 	}
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w)
 
 	if len(run.Identities) == 0 {
-		fmt.Fprintln(w, "No identities found.")
+		_, _ = fmt.Fprintln(w, "No identities found.")
 		return nil
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "SCORE\tTYPE\tNAME\tAGENT\tOWNER\tFINDINGS\tBREAKDOWN")
-	fmt.Fprintln(tw, "-----\t----\t----\t-----\t-----\t--------\t---------")
+	_, _ = fmt.Fprintln(tw, "SCORE\tTYPE\tNAME\tAGENT\tOWNER\tFINDINGS\tBREAKDOWN")
+	_, _ = fmt.Fprintln(tw, "-----\t----\t----\t-----\t-----\t--------\t---------")
 
 	for _, id := range run.Identities {
 		name := id.Name
@@ -105,7 +105,7 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 			}
 		}
 
-		fmt.Fprintf(tw, "%.1f/10\t%s\t%s\t%s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(tw, "%.1f/10\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			id.RiskScore,
 			id.Type,
 			name,
@@ -120,13 +120,13 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 	}
 
 	if len(run.Warnings) > 0 {
-		fmt.Fprintf(w, "\nWarnings (%d):\n", len(run.Warnings))
+		_, _ = fmt.Fprintf(w, "\nWarnings (%d):\n", len(run.Warnings))
 		limit := min(len(run.Warnings), 10)
 		for i := 0; i < limit; i++ {
-			fmt.Fprintf(w, "  - %s\n", run.Warnings[i])
+			_, _ = fmt.Fprintf(w, "  - %s\n", run.Warnings[i])
 		}
 		if len(run.Warnings) > limit {
-			fmt.Fprintf(w, "  - ... and %d more warning(s)\n", len(run.Warnings)-limit)
+			_, _ = fmt.Fprintf(w, "  - ... and %d more warning(s)\n", len(run.Warnings)-limit)
 		}
 	}
 

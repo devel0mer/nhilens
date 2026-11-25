@@ -196,122 +196,122 @@ func WriteJSON(w io.Writer, res *Result) error {
 
 // WriteTable writes a concise terminal diff summary.
 func WriteTable(w io.Writer, res *Result) error {
-	fmt.Fprintf(w, "nhilens diff summary\n")
-	fmt.Fprintf(w, "  Base scan:  %s (account %s, %s)\n", res.Base.ID, res.Base.AccountID, res.Base.StartedAt.UTC().Format("2006-01-02 15:04 UTC"))
-	fmt.Fprintf(w, "  Head scan:  %s (account %s, %s)\n", res.Head.ID, res.Head.AccountID, res.Head.StartedAt.UTC().Format("2006-01-02 15:04 UTC"))
-	fmt.Fprintf(w, "  Identities: +%d added, -%d removed\n", res.Summary.AddedIdentities, res.Summary.RemovedIdentities)
-	fmt.Fprintf(w, "  Risk scores: %d increased, %d decreased\n", res.Summary.ScoreIncreased, res.Summary.ScoreDecreased)
-	fmt.Fprintf(w, "  Findings:   +%d new/escalated, -%d resolved\n\n", res.Summary.NewFindings, res.Summary.ResolvedFindings)
+	_, _ = fmt.Fprintf(w, "nhilens diff summary\n")
+	_, _ = fmt.Fprintf(w, "  Base scan:  %s (account %s, %s)\n", res.Base.ID, res.Base.AccountID, res.Base.StartedAt.UTC().Format("2006-01-02 15:04 UTC"))
+	_, _ = fmt.Fprintf(w, "  Head scan:  %s (account %s, %s)\n", res.Head.ID, res.Head.AccountID, res.Head.StartedAt.UTC().Format("2006-01-02 15:04 UTC"))
+	_, _ = fmt.Fprintf(w, "  Identities: +%d added, -%d removed\n", res.Summary.AddedIdentities, res.Summary.RemovedIdentities)
+	_, _ = fmt.Fprintf(w, "  Risk scores: %d increased, %d decreased\n", res.Summary.ScoreIncreased, res.Summary.ScoreDecreased)
+	_, _ = fmt.Fprintf(w, "  Findings:   +%d new/escalated, -%d resolved\n\n", res.Summary.NewFindings, res.Summary.ResolvedFindings)
 
 	if len(res.NewFindings) > 0 {
-		fmt.Fprintln(w, "New / Escalated Findings:")
+		_, _ = fmt.Fprintln(w, "New / Escalated Findings:")
 		tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw, "SEVERITY\tRULE\tTYPE\tIDENTITY\tAGENT\tDETAIL")
+		_, _ = fmt.Fprintln(tw, "SEVERITY\tRULE\tTYPE\tIDENTITY\tAGENT\tDETAIL")
 		for _, f := range res.NewFindings {
 			sevStr := string(f.Severity)
 			if f.PreviousSeverity != "" {
 				sevStr = fmt.Sprintf("%s->%s", f.PreviousSeverity, f.Severity)
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", sevStr, f.RuleID, f.IdentityType, f.IdentityName, f.AgentLikelihood, f.Title)
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", sevStr, f.RuleID, f.IdentityType, f.IdentityName, f.AgentLikelihood, f.Title)
 		}
 		if err := tw.Flush(); err != nil {
 			return err
 		}
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 	}
 
 	if len(res.ScoreChanges) > 0 {
-		fmt.Fprintln(w, "Risk Score Changes:")
+		_, _ = fmt.Fprintln(w, "Risk Score Changes:")
 		tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw, "DELTA\tBASE\tHEAD\tTYPE\tIDENTITY\tAGENT")
+		_, _ = fmt.Fprintln(tw, "DELTA\tBASE\tHEAD\tTYPE\tIDENTITY\tAGENT")
 		for _, sc := range res.ScoreChanges {
-			fmt.Fprintf(tw, "%+.1f\t%.1f\t%.1f\t%s\t%s\t%s\n", sc.Delta, sc.BaseScore, sc.HeadScore, sc.IdentityType, sc.IdentityName, sc.AgentLikelihood)
+			_, _ = fmt.Fprintf(tw, "%+.1f\t%.1f\t%.1f\t%s\t%s\t%s\n", sc.Delta, sc.BaseScore, sc.HeadScore, sc.IdentityType, sc.IdentityName, sc.AgentLikelihood)
 		}
 		if err := tw.Flush(); err != nil {
 			return err
 		}
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 	}
 
 	if len(res.ResolvedFindings) > 0 {
-		fmt.Fprintln(w, "Resolved Findings:")
+		_, _ = fmt.Fprintln(w, "Resolved Findings:")
 		tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw, "SEVERITY\tRULE\tTYPE\tIDENTITY")
+		_, _ = fmt.Fprintln(tw, "SEVERITY\tRULE\tTYPE\tIDENTITY")
 		for _, f := range res.ResolvedFindings {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", f.Severity, f.RuleID, f.IdentityType, f.IdentityName)
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", f.Severity, f.RuleID, f.IdentityType, f.IdentityName)
 		}
 		if err := tw.Flush(); err != nil {
 			return err
 		}
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 	}
 
 	if len(res.AddedIdentities) > 0 {
-		fmt.Fprintln(w, "Added Identities:")
+		_, _ = fmt.Fprintln(w, "Added Identities:")
 		for _, id := range res.AddedIdentities {
-			fmt.Fprintf(w, "  + [%s] %s (score %.1f/10, agent=%s)\n", id.Type, id.Name, id.RiskScore, id.AgentLikelihood)
+			_, _ = fmt.Fprintf(w, "  + [%s] %s (score %.1f/10, agent=%s)\n", id.Type, id.Name, id.RiskScore, id.AgentLikelihood)
 		}
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 	}
 
 	if len(res.RemovedIdentities) > 0 {
-		fmt.Fprintln(w, "Removed Identities:")
+		_, _ = fmt.Fprintln(w, "Removed Identities:")
 		for _, id := range res.RemovedIdentities {
-			fmt.Fprintf(w, "  - [%s] %s (was score %.1f/10)\n", id.Type, id.Name, id.RiskScore)
+			_, _ = fmt.Fprintf(w, "  - [%s] %s (was score %.1f/10)\n", id.Type, id.Name, id.RiskScore)
 		}
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 	}
 
 	if res.Summary == (DiffSummary{}) {
-		fmt.Fprintln(w, "No identity, score, or finding changes detected.")
+		_, _ = fmt.Fprintln(w, "No identity, score, or finding changes detected.")
 	}
 	return nil
 }
 
 // WriteMarkdown renders a PR-comment-ready Markdown diff report.
 func WriteMarkdown(w io.Writer, res *Result) error {
-	fmt.Fprintf(w, "## nhilens Scan Diff\n\n")
-	fmt.Fprintf(w, "- **Base:** `%s` (account `%s`, %s)\n", res.Base.ID, res.Base.AccountID, res.Base.StartedAt.UTC().Format("2006-01-02 15:04 UTC"))
-	fmt.Fprintf(w, "- **Head:** `%s` (account `%s`, %s)\n", res.Head.ID, res.Head.AccountID, res.Head.StartedAt.UTC().Format("2006-01-02 15:04 UTC"))
-	fmt.Fprintf(w, "- **Summary:** `+%d` / `-%d` identities | `%d` score up / `%d` score down | `+%d` new findings / `-%d` resolved\n\n",
+	_, _ = fmt.Fprintf(w, "## nhilens Scan Diff\n\n")
+	_, _ = fmt.Fprintf(w, "- **Base:** `%s` (account `%s`, %s)\n", res.Base.ID, res.Base.AccountID, res.Base.StartedAt.UTC().Format("2006-01-02 15:04 UTC"))
+	_, _ = fmt.Fprintf(w, "- **Head:** `%s` (account `%s`, %s)\n", res.Head.ID, res.Head.AccountID, res.Head.StartedAt.UTC().Format("2006-01-02 15:04 UTC"))
+	_, _ = fmt.Fprintf(w, "- **Summary:** `+%d` / `-%d` identities | `%d` score up / `%d` score down | `+%d` new findings / `-%d` resolved\n\n",
 		res.Summary.AddedIdentities, res.Summary.RemovedIdentities,
 		res.Summary.ScoreIncreased, res.Summary.ScoreDecreased,
 		res.Summary.NewFindings, res.Summary.ResolvedFindings,
 	)
 
 	if len(res.NewFindings) > 0 {
-		fmt.Fprintln(w, "### New / Escalated Findings")
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, "| Severity | Rule | Type | Identity | Agent | Detail |")
-		fmt.Fprintln(w, "|---|---|---|---|---|---|")
+		_, _ = fmt.Fprintln(w, "### New / Escalated Findings")
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "| Severity | Rule | Type | Identity | Agent | Detail |")
+		_, _ = fmt.Fprintln(w, "|---|---|---|---|---|---|")
 		for _, f := range res.NewFindings {
 			sevStr := string(f.Severity)
 			if f.PreviousSeverity != "" {
 				sevStr = fmt.Sprintf("%s → %s", f.PreviousSeverity, f.Severity)
 			}
-			fmt.Fprintf(w, "| %s | `%s` | %s | `%s` | %s | %s |\n", sevStr, f.RuleID, f.IdentityType, f.IdentityName, f.AgentLikelihood, f.Title)
+			_, _ = fmt.Fprintf(w, "| %s | `%s` | %s | `%s` | %s | %s |\n", sevStr, f.RuleID, f.IdentityType, f.IdentityName, f.AgentLikelihood, f.Title)
 		}
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 	}
 
 	if len(res.ScoreChanges) > 0 {
-		fmt.Fprintln(w, "### Risk Score Changes")
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, "| Delta | Base | Head | Type | Identity | Agent |")
-		fmt.Fprintln(w, "|---|---|---|---|---|---|")
+		_, _ = fmt.Fprintln(w, "### Risk Score Changes")
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "| Delta | Base | Head | Type | Identity | Agent |")
+		_, _ = fmt.Fprintln(w, "|---|---|---|---|---|---|")
 		for _, sc := range res.ScoreChanges {
-			fmt.Fprintf(w, "| %+.1f | %.1f | %.1f | %s | `%s` | %s |\n", sc.Delta, sc.BaseScore, sc.HeadScore, sc.IdentityType, sc.IdentityName, sc.AgentLikelihood)
+			_, _ = fmt.Fprintf(w, "| %+.1f | %.1f | %.1f | %s | `%s` | %s |\n", sc.Delta, sc.BaseScore, sc.HeadScore, sc.IdentityType, sc.IdentityName, sc.AgentLikelihood)
 		}
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 	}
 
 	if len(res.ResolvedFindings) > 0 {
-		fmt.Fprintln(w, "### Resolved Findings")
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "### Resolved Findings")
+		_, _ = fmt.Fprintln(w)
 		for _, f := range res.ResolvedFindings {
-			fmt.Fprintf(w, "- `%s` (%s) on `%s` (%s)\n", f.RuleID, f.Severity, f.IdentityName, f.IdentityType)
+			_, _ = fmt.Fprintf(w, "- `%s` (%s) on `%s` (%s)\n", f.RuleID, f.Severity, f.IdentityName, f.IdentityType)
 		}
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 	}
 
 	return nil

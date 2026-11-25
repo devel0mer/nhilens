@@ -189,7 +189,7 @@ func runScan(ctx context.Context, stdout io.Writer, opts *ScanOptions, deps Scan
 	if err != nil {
 		return fmt.Errorf("open store %q: %w", opts.DBPath, err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	if err := st.SaveScan(ctx, run); err != nil {
 		return fmt.Errorf("save scan to %q: %w", opts.DBPath, err)

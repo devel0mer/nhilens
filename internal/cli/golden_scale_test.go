@@ -252,7 +252,7 @@ func TestLargeAccountPaginationAndScale(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open DB: %v", err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	saved, err := st.LoadLatestScan(context.Background())
 	if err != nil {

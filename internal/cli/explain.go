@@ -21,15 +21,15 @@ Run 'nhilens explain' with no arguments to list all built-in rules (R1–R8).`,
 			out := cmd.OutOrStdout()
 			if len(args) == 0 {
 				tw := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
-				fmt.Fprintln(tw, "RULE\tNAME\tDEFAULT SEVERITY\tSUMMARY")
-				fmt.Fprintln(tw, "----\t----\t----------------\t-------")
+				_, _ = fmt.Fprintln(tw, "RULE\tNAME\tDEFAULT SEVERITY\tSUMMARY")
+				_, _ = fmt.Fprintln(tw, "----\t----\t----------------\t-------")
 				for _, m := range rules.Catalog() {
-					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", m.ID, m.Name, m.DefaultSeverity, m.Summary)
+					_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", m.ID, m.Name, m.DefaultSeverity, m.Summary)
 				}
 				if err := tw.Flush(); err != nil {
 					return err
 				}
-				fmt.Fprintln(out, "\nRun `nhilens explain <RULE_ID>` (e.g., `nhilens explain R5`) for remediation templates.")
+				_, _ = fmt.Fprintln(out, "\nRun `nhilens explain <RULE_ID>` (e.g., `nhilens explain R5`) for remediation templates.")
 				return nil
 			}
 
@@ -42,19 +42,19 @@ Run 'nhilens explain' with no arguments to list all built-in rules (R1–R8).`,
 				return fmt.Errorf("unknown rule %q (valid rules: %s)", args[0], strings.Join(ids, ", "))
 			}
 
-			fmt.Fprintf(out, "%s — %s (default severity: %s)\n", meta.ID, meta.Name, meta.DefaultSeverity)
-			fmt.Fprintf(out, "%s\n\n", strings.Repeat("=", len(meta.ID)+len(meta.Name)+30))
-			fmt.Fprintf(out, "What it checks:\n  %s\n\n", meta.Description)
-			fmt.Fprintf(out, "Guardrails:\n  %s\n\n", meta.Guardrails)
-			fmt.Fprintf(out, "Config knobs (nhilens.yaml):\n  %s\n\n", strings.Join(meta.ConfigKnobs, ", "))
-			fmt.Fprintf(out, "Remediation:\n  %s\n\n", meta.Remediation)
-			fmt.Fprintf(out, "AWS CLI snippet (review before running — nhilens is strictly read-only):\n")
+			_, _ = fmt.Fprintf(out, "%s — %s (default severity: %s)\n", meta.ID, meta.Name, meta.DefaultSeverity)
+			_, _ = fmt.Fprintf(out, "%s\n\n", strings.Repeat("=", len(meta.ID)+len(meta.Name)+30))
+			_, _ = fmt.Fprintf(out, "What it checks:\n  %s\n\n", meta.Description)
+			_, _ = fmt.Fprintf(out, "Guardrails:\n  %s\n\n", meta.Guardrails)
+			_, _ = fmt.Fprintf(out, "Config knobs (nhilens.yaml):\n  %s\n\n", strings.Join(meta.ConfigKnobs, ", "))
+			_, _ = fmt.Fprintf(out, "Remediation:\n  %s\n\n", meta.Remediation)
+			_, _ = fmt.Fprintf(out, "AWS CLI snippet (review before running — nhilens is strictly read-only):\n")
 			for _, line := range strings.Split(meta.ExampleCLI, "\n") {
-				fmt.Fprintf(out, "  %s\n", line)
+				_, _ = fmt.Fprintf(out, "  %s\n", line)
 			}
-			fmt.Fprintf(out, "\nTerraform snippet:\n")
+			_, _ = fmt.Fprintf(out, "\nTerraform snippet:\n")
 			for _, line := range strings.Split(meta.ExampleTerraform, "\n") {
-				fmt.Fprintf(out, "  %s\n", line)
+				_, _ = fmt.Fprintf(out, "  %s\n", line)
 			}
 			return nil
 		},

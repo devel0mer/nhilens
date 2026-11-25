@@ -60,7 +60,7 @@ func runReport(ctx context.Context, stdout io.Writer, opts *ReportOptions) error
 	if err != nil {
 		return fmt.Errorf("open database %q: %w", opts.InDB, err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	run, err := st.LoadLatestScan(ctx)
 	if err != nil {
@@ -100,7 +100,7 @@ func runReport(ctx context.Context, stdout io.Writer, opts *ReportOptions) error
 		return fmt.Errorf("close report file %q: %w", opts.Out, closeErr)
 	}
 
-	fmt.Fprintf(stdout, "Wrote %s report for scan %s (account %s) to %s\n", opts.Format, run.ID, run.AccountID, opts.Out)
+	_, _ = fmt.Fprintf(stdout, "Wrote %s report for scan %s (account %s) to %s\n", opts.Format, run.ID, run.AccountID, opts.Out)
 	return nil
 }
 

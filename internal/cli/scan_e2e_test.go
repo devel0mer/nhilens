@@ -228,7 +228,7 @@ func TestScanEndToEndTableJSONSQLiteAndFailOn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open saved SQLite DB: %v", err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	saved, err := st.LoadLatestScan(context.Background())
 	if err != nil {

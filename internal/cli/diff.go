@@ -112,7 +112,7 @@ func runDiff(ctx context.Context, stdout io.Writer, opts *DiffOptions) error {
 		if openErr != nil {
 			return fmt.Errorf("open database %q: %w", opts.BaseDB, openErr)
 		}
-		defer st.Close()
+		defer func() { _ = st.Close() }()
 
 		scans, listErr := st.ListScans(ctx)
 		if listErr != nil {
@@ -175,7 +175,7 @@ func loadScanFromDB(ctx context.Context, dbPath, scanID string) (*model.ScanRun,
 	if err != nil {
 		return nil, fmt.Errorf("open %q: %w", dbPath, err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	if scanID != "" {
 		return st.LoadScan(ctx, scanID)

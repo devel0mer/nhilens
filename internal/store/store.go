@@ -221,7 +221,7 @@ func (s *Store) SaveScan(ctx context.Context, run *model.ScanRun) error {
 	if err != nil {
 		return fmt.Errorf("prepare identity insert: %w", err)
 	}
-	defer idStmt.Close()
+	defer func() { _ = idStmt.Close() }()
 
 	findingStmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO findings (
@@ -231,7 +231,7 @@ func (s *Store) SaveScan(ctx context.Context, run *model.ScanRun) error {
 	if err != nil {
 		return fmt.Errorf("prepare finding insert: %w", err)
 	}
-	defer findingStmt.Close()
+	defer func() { _ = findingStmt.Close() }()
 
 	for _, ident := range run.Identities {
 		payload, err := json.Marshal(ident)
@@ -357,7 +357,7 @@ func (s *Store) LoadScan(ctx context.Context, scanID string) (*model.ScanRun, er
 	if err != nil {
 		return nil, fmt.Errorf("query identities for scan %q: %w", scanID, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	run.Identities = make([]model.Identity, 0)
 	for rows.Next() {
@@ -389,7 +389,7 @@ func (s *Store) ListScans(ctx context.Context) ([]ScanSummary, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list scans: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := make([]ScanSummary, 0)
 	for rows.Next() {

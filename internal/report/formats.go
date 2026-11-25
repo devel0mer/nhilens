@@ -20,30 +20,30 @@ func WriteMarkdown(w io.Writer, run *model.ScanRun) error {
 	data := Build(run, time.Now().UTC())
 	s := data.Summary
 
-	fmt.Fprintf(w, "# nhilens Audit Report — Account `%s`\n\n", s.AccountID)
-	fmt.Fprintf(w, "> **Review before sharing:** Contains AWS account IDs, IAM ARNs, tag values, policy details, and best-effort CloudTrail source IPs.\n\n")
+	_, _ = fmt.Fprintf(w, "# nhilens Audit Report — Account `%s`\n\n", s.AccountID)
+	_, _ = fmt.Fprintf(w, "> **Review before sharing:** Contains AWS account IDs, IAM ARNs, tag values, policy details, and best-effort CloudTrail source IPs.\n\n")
 
-	fmt.Fprintf(w, "## Summary\n\n")
-	fmt.Fprintf(w, "| Metric | Value |\n|---|---|\n")
-	fmt.Fprintf(w, "| Account / Region | `%s` (`%s`) |\n", s.AccountID, s.Region)
-	fmt.Fprintf(w, "| Scan ID | `%s` |\n", s.ScanID)
-	fmt.Fprintf(w, "| Identities | %d total (%d roles, %d users, %d keys; %d service-linked) |\n",
+	_, _ = fmt.Fprintf(w, "## Summary\n\n")
+	_, _ = fmt.Fprintf(w, "| Metric | Value |\n|---|---|\n")
+	_, _ = fmt.Fprintf(w, "| Account / Region | `%s` (`%s`) |\n", s.AccountID, s.Region)
+	_, _ = fmt.Fprintf(w, "| Scan ID | `%s` |\n", s.ScanID)
+	_, _ = fmt.Fprintf(w, "| Identities | %d total (%d roles, %d users, %d keys; %d service-linked) |\n",
 		s.TotalIdentities, s.Roles, s.Users, s.Keys, s.ServiceLinkedRoles)
-	fmt.Fprintf(w, "| Heuristic AI / Automation | %d likely, %d possible |\n", s.AgentLikely, s.AgentPossible)
-	fmt.Fprintf(w, "| Active Findings | %d total (%d critical, %d high, %d medium, %d low) |\n",
+	_, _ = fmt.Fprintf(w, "| Heuristic AI / Automation | %d likely, %d possible |\n", s.AgentLikely, s.AgentPossible)
+	_, _ = fmt.Fprintf(w, "| Active Findings | %d total (%d critical, %d high, %d medium, %d low) |\n",
 		s.TotalFindings, s.CriticalFindings, s.HighFindings, s.MediumFindings, s.LowFindings)
 	if run.SuppressedFindingCount > 0 {
-		fmt.Fprintf(w, "| Suppressed Findings | %d (via baseline ignore file) |\n", run.SuppressedFindingCount)
+		_, _ = fmt.Fprintf(w, "| Suppressed Findings | %d (via baseline ignore file) |\n", run.SuppressedFindingCount)
 	}
-	fmt.Fprintf(w, "| CloudTrail Attribution | `%s` (%d events, `%s` window) |\n\n", s.CloudTrailStatus, s.CloudTrailEventCount, s.SinceWindow)
+	_, _ = fmt.Fprintf(w, "| CloudTrail Attribution | `%s` (%d events, `%s` window) |\n\n", s.CloudTrailStatus, s.CloudTrailEventCount, s.SinceWindow)
 
-	fmt.Fprintf(w, "## Top 10 Risky Identities\n\n")
+	_, _ = fmt.Fprintf(w, "## Top 10 Risky Identities\n\n")
 	if len(data.TopRisky) == 0 {
-		fmt.Fprintln(w, "No risky findings recorded in this scan.")
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "No risky findings recorded in this scan.")
+		_, _ = fmt.Fprintln(w)
 	} else {
-		fmt.Fprintln(w, "| Score | Type | Identity | Agent | AI Services | Owner | Findings |")
-		fmt.Fprintln(w, "|---|---|---|---|---|---|---|")
+		_, _ = fmt.Fprintln(w, "| Score | Type | Identity | Agent | AI Services | Owner | Findings |")
+		_, _ = fmt.Fprintln(w, "|---|---|---|---|---|---|---|")
 		for _, id := range data.TopRisky {
 			owner := "<none>"
 			if id.Owner != nil && strings.TrimSpace(*id.Owner) != "" {
@@ -57,31 +57,31 @@ func WriteMarkdown(w io.Writer, run *model.ScanRun) error {
 			for _, f := range id.Findings {
 				fList = append(fList, fmt.Sprintf("`%s`(%s)", f.RuleID, f.Severity))
 			}
-			fmt.Fprintf(w, "| **%.1f/10** (raw %.1f) | %s | `%s` | %s | %s | `%s` | %s |\n",
+			_, _ = fmt.Fprintf(w, "| **%.1f/10** (raw %.1f) | %s | `%s` | %s | %s | `%s` | %s |\n",
 				id.RiskScore, id.RawRiskPoints, id.Type, id.Name, id.AgentLikelihood, aiSvc, owner, strings.Join(fList, ", "))
 		}
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 	}
 
-	fmt.Fprintf(w, "## Findings by Rule\n\n")
+	_, _ = fmt.Fprintf(w, "## Findings by Rule\n\n")
 	for _, rg := range data.RuleGroups {
-		fmt.Fprintf(w, "### %s — `%s` (%d finding(s))\n\n", rg.RuleID, rg.RuleName, rg.Count)
-		fmt.Fprintf(w, "%s\n\n", rg.Explanation)
-		fmt.Fprintf(w, "**Remediation hint:** %s\n\n", rg.Remediation)
+		_, _ = fmt.Fprintf(w, "### %s — `%s` (%d finding(s))\n\n", rg.RuleID, rg.RuleName, rg.Count)
+		_, _ = fmt.Fprintf(w, "%s\n\n", rg.Explanation)
+		_, _ = fmt.Fprintf(w, "**Remediation hint:** %s\n\n", rg.Remediation)
 		if len(rg.Items) > 0 {
-			fmt.Fprintln(w, "| Identity | Type | Severity | Score | Evidence |")
-			fmt.Fprintln(w, "|---|---|---|---|---|")
+			_, _ = fmt.Fprintln(w, "| Identity | Type | Severity | Score | Evidence |")
+			_, _ = fmt.Fprintln(w, "|---|---|---|---|---|")
 			for _, item := range rg.Items {
-				fmt.Fprintf(w, "| `%s` | %s | %s | %.1f/10 | %s |\n",
+				_, _ = fmt.Fprintf(w, "| `%s` | %s | %s | %.1f/10 | %s |\n",
 					item.IdentityName, item.IdentityType, item.Severity, item.RiskScore, strings.Join(item.Evidence, "; "))
 			}
-			fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w)
 		}
 	}
 
-	fmt.Fprintf(w, "## Limitations\n\n")
+	_, _ = fmt.Fprintf(w, "## Limitations\n\n")
 	for _, lim := range data.Limitations {
-		fmt.Fprintf(w, "- **%s:** %s\n", lim.Title, lim.Detail)
+		_, _ = fmt.Fprintf(w, "- **%s:** %s\n", lim.Title, lim.Detail)
 	}
 	return nil
 }

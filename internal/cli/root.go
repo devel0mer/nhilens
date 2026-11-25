@@ -59,11 +59,11 @@ func ExecuteWithDeps(args []string, stdout, stderr io.Writer, deps ScanDeps) int
 		var exitErr *ExitError
 		if errors.As(err, &exitErr) {
 			if exitErr.Err != nil {
-				fmt.Fprintf(stderr, "error: %v\n", exitErr.Err)
+				_, _ = fmt.Fprintf(stderr, "error: %v\n", exitErr.Err)
 			}
 			return exitErr.Code
 		}
-		fmt.Fprintf(stderr, "error: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
 	}
 	return 0

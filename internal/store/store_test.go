@@ -20,7 +20,7 @@ func TestStoreSaveAndLoadRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open(%q) failed: %v", dbPath, err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	if runtime.GOOS != "windows" {
 		info, statErr := os.Stat(dbPath)
@@ -172,5 +172,5 @@ func TestOpenInMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open(:memory:) failed: %v", err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 }
