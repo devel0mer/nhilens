@@ -1,0 +1,395 @@
+{
+  "description": "Anonymized, expert-labeled IAM & trust policy validation corpus for measuring TP/FP/FN precision and recall across nhilens rules R1-R8.",
+  "reference_time": "2026-11-25T12:00:00Z",
+  "peer_roles": [
+    {
+      "arn": "arn:aws:iam::111122223333:role/prod-admin-exec",
+      "name": "prod-admin-exec",
+      "account": "111122223333",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\",\"AWS\":\"arn:aws:iam::111122223333:root\"},\"Action\":\"sts:AssumeRole\"}]}",
+      "managed_arns": ["arn:aws:iam::aws:policy/AdministratorAccess"]
+    },
+    {
+      "arn": "arn:aws:iam::111122223333:role/readonly-metrics-exec",
+      "name": "readonly-metrics-exec",
+      "account": "111122223333",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\",\"AWS\":\"arn:aws:iam::111122223333:root\"},\"Action\":\"sts:AssumeRole\"}]}",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"cloudwatch:GetMetricData\",\"s3:GetObject\"],\"Resource\":\"arn:aws:s3:::metrics-bucket/*\"}]}"
+    },
+    {
+      "arn": "arn:aws:iam::111122223333:role/secrets-reader-exec",
+      "name": "secrets-reader-exec",
+      "account": "111122223333",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"ecs-tasks.amazonaws.com\",\"AWS\":\"arn:aws:iam::111122223333:root\"},\"Action\":\"sts:AssumeRole\"}]}",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"secretsmanager:GetSecretValue\",\"Resource\":\"*\"}]}"
+    }
+  ],
+  "cases": [
+    {
+      "id": "R5-github-oidc-missing-sub",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "gh-missing-sub",
+      "owner": "platform",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\",\"Condition\":{\"StringEquals\":{\"token.actions.githubusercontent.com:aud\":\"sts.amazonaws.com\"}}}]}",
+      "expected": {"R5": "critical"}
+    },
+    {
+      "id": "R5-github-oidc-wildcard-sub",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "gh-wildcard-sub",
+      "owner": "platform",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\",\"Condition\":{\"StringEquals\":{\"token.actions.githubusercontent.com:aud\":\"sts.amazonaws.com\"},\"StringLike\":{\"token.actions.githubusercontent.com:sub\":\"repo:acme-org/*:*\"}}}]}",
+      "expected": {"R5": "high"}
+    },
+    {
+      "id": "R5-github-oidc-missing-aud",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "gh-missing-aud",
+      "owner": "platform",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\",\"Condition\":{\"StringEquals\":{\"token.actions.githubusercontent.com:sub\":\"repo:acme-org/app:ref:refs/heads/main\"}}}]}",
+      "expected": {"R5": "high"}
+    },
+    {
+      "id": "R5-github-oidc-pinned-clean",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "gh-pinned-clean",
+      "owner": "platform",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\",\"Condition\":{\"StringEquals\":{\"token.actions.githubusercontent.com:aud\":\"sts.amazonaws.com\",\"token.actions.githubusercontent.com:sub\":\"repo:acme-org/app:ref:refs/heads/main\"}}}]}",
+      "expected": {}
+    },
+    {
+      "id": "R5-gitlab-oidc-missing-sub",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "gitlab-missing-sub",
+      "owner": "devops",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:oidc-provider/gitlab.com\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\",\"Condition\":{\"StringEquals\":{\"gitlab.com:aud\":\"https://gitlab.com\"}}}]}",
+      "expected": {"R5": "critical"}
+    },
+    {
+      "id": "R5-gitlab-oidc-wildcard-sub",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "gitlab-wildcard-sub",
+      "owner": "devops",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:oidc-provider/gitlab.com\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\",\"Condition\":{\"StringEquals\":{\"gitlab.com:aud\":\"https://gitlab.com\"},\"StringLike\":{\"gitlab.com:sub\":\"project_path:acme/*:ref_type:branch:ref:*\"}}}]}",
+      "expected": {"R5": "high"}
+    },
+    {
+      "id": "R5-gitlab-oidc-pinned-clean",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "gitlab-pinned-clean",
+      "owner": "devops",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:oidc-provider/gitlab.com\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\",\"Condition\":{\"StringEquals\":{\"gitlab.com:aud\":\"https://gitlab.com\",\"gitlab.com:sub\":\"project_path:acme/service:ref_type:branch:ref:main\"}}}]}",
+      "expected": {}
+    },
+    {
+      "id": "R5-eks-irsa-missing-sub",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "eks-irsa-missing-sub",
+      "owner": "k8s",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\",\"Condition\":{\"StringEquals\":{\"oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE:aud\":\"sts.amazonaws.com\"}}}]}",
+      "expected": {"R5": "critical"}
+    },
+    {
+      "id": "R5-eks-irsa-wildcard-sub",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "eks-irsa-wildcard-sub",
+      "owner": "k8s",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\",\"Condition\":{\"StringEquals\":{\"oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE:aud\":\"sts.amazonaws.com\"},\"StringLike\":{\"oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE:sub\":\"system:serviceaccount:prod:*\"}}}]}",
+      "expected": {"R5": "high"}
+    },
+    {
+      "id": "R5-eks-irsa-pinned-clean",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "eks-irsa-pinned-clean",
+      "owner": "k8s",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\",\"Condition\":{\"StringEquals\":{\"oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE:aud\":\"sts.amazonaws.com\",\"oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE:sub\":\"system:serviceaccount:prod:agent-runner\"}}}]}",
+      "expected": {}
+    },
+    {
+      "id": "R5-cognito-missing-aud",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "cognito-no-aud",
+      "owner": "mobile",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"cognito-identity.amazonaws.com\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\"}]}",
+      "expected": {"R5": "critical"}
+    },
+    {
+      "id": "R5-cognito-unauthenticated-amr",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "cognito-unauth",
+      "owner": "mobile",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"cognito-identity.amazonaws.com\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\",\"Condition\":{\"StringEquals\":{\"cognito-identity.amazonaws.com:aud\":\"us-east-1:11111111-2222-3333-4444-555555555555\"},\"ForAnyValue:StringLike\":{\"cognito-identity.amazonaws.com:amr\":\"unauthenticated\"}}}]}",
+      "expected": {"R5": "high"}
+    },
+    {
+      "id": "R5-cognito-authenticated-clean",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "cognito-clean",
+      "owner": "mobile",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"cognito-identity.amazonaws.com\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\",\"Condition\":{\"StringEquals\":{\"cognito-identity.amazonaws.com:aud\":\"us-east-1:11111111-2222-3333-4444-555555555555\"},\"ForAnyValue:StringLike\":{\"cognito-identity.amazonaws.com:amr\":\"authenticated\"}}}]}",
+      "expected": {}
+    },
+    {
+      "id": "R5-saml-missing-aud",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "saml-missing-aud",
+      "owner": "iam-team",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:saml-provider/OktaProd\"},\"Action\":\"sts:AssumeRoleWithSAML\"}]}",
+      "expected": {"R5": "high"}
+    },
+    {
+      "id": "R5-saml-pinned-aud-clean",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "saml-clean",
+      "owner": "iam-team",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:saml-provider/OktaProd\"},\"Action\":\"sts:AssumeRoleWithSAML\",\"Condition\":{\"StringEquals\":{\"SAML:aud\":\"https://signin.aws.amazon.com/saml\"}}}]}",
+      "expected": {}
+    },
+    {
+      "id": "R5-cross-account-missing-external-id",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "vendor-no-extid",
+      "owner": "secops",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::999988887777:root\"},\"Action\":\"sts:AssumeRole\"}]}",
+      "expected": {"R5": "high"}
+    },
+    {
+      "id": "R5-cross-account-with-external-id-clean",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "vendor-with-extid",
+      "owner": "secops",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::999988887777:root\"},\"Action\":\"sts:AssumeRole\",\"Condition\":{\"StringEquals\":{\"sts:ExternalId\":\"ext-9f8e7d6c\"}}}]}",
+      "expected": {}
+    },
+    {
+      "id": "R5-cross-account-with-org-id-clean",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "internal-org-role",
+      "owner": "secops",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::999988887777:root\"},\"Action\":\"sts:AssumeRole\",\"Condition\":{\"StringEquals\":{\"aws:PrincipalOrgID\":\"o-abc1234567\"}}}]}",
+      "expected": {}
+    },
+    {
+      "id": "R5-wildcard-principal-unconditioned",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "public-wildcard-trust",
+      "owner": "secops",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":\"sts:AssumeRole\"}]}",
+      "expected": {"R5": "critical"}
+    },
+    {
+      "id": "R5-wildcard-principal-org-scoped-clean",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "org-wildcard-trust",
+      "owner": "secops",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":\"sts:AssumeRole\",\"Condition\":{\"StringEquals\":{\"aws:PrincipalOrgID\":\"o-abc1234567\"}}}]}",
+      "expected": {}
+    },
+    {
+      "id": "R5-bedrock-confused-deputy",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "bedrock-no-source",
+      "owner": "ai-platform",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"bedrock.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}",
+      "expected": {"R5": "medium"}
+    },
+    {
+      "id": "R5-bedrock-source-account-clean",
+      "rule_focus": "R5",
+      "type": "role",
+      "name": "bedrock-source-pinned",
+      "owner": "ai-platform",
+      "trust_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"bedrock.amazonaws.com\"},\"Action\":\"sts:AssumeRole\",\"Condition\":{\"StringEquals\":{\"aws:SourceAccount\":\"111122223333\"}}}]}",
+      "expected": {}
+    },
+    {
+      "id": "R1-admin-unconditioned",
+      "rule_focus": "R1",
+      "type": "role",
+      "name": "unbounded-admin-agent",
+      "owner": "ai-platform",
+      "managed_arns": ["arn:aws:iam::aws:policy/AdministratorAccess"],
+      "expected": {"R1": "critical"}
+    },
+    {
+      "id": "R1-admin-conditioned-downgrade",
+      "rule_focus": "R1",
+      "type": "role",
+      "name": "conditioned-admin-role",
+      "owner": "secops",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"*\",\"Resource\":\"*\",\"Condition\":{\"IpAddress\":{\"aws:SourceIp\":\"198.51.100.0/24\"}}}]}",
+      "expected": {"R1": "high"}
+    },
+    {
+      "id": "R1-admin-capped-by-boundary",
+      "rule_focus": "R1",
+      "type": "role",
+      "name": "boundary-capped-admin",
+      "owner": "secops",
+      "managed_arns": ["arn:aws:iam::aws:policy/AdministratorAccess"],
+      "boundary_doc": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"sts:GetCallerIdentity\"],\"Resource\":\"*\"}]}",
+      "expected": {"R1": "medium"}
+    },
+    {
+      "id": "R1-scoped-s3-wildcard-clean",
+      "rule_focus": "R1",
+      "type": "role",
+      "name": "scoped-s3-worker",
+      "owner": "data",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:*\",\"Resource\":\"arn:aws:s3:::acme-data/*\"}]}",
+      "expected": {}
+    },
+    {
+      "id": "R6-scoped-passrole-to-admin-with-lambda-launch",
+      "rule_focus": "R6",
+      "type": "role",
+      "name": "deployer-pass-admin",
+      "owner": "devops",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"iam:PassRole\",\"Resource\":\"arn:aws:iam::111122223333:role/prod-admin-exec\",\"Condition\":{\"StringEquals\":{\"iam:PassedToService\":\"lambda.amazonaws.com\"}}},{\"Effect\":\"Allow\",\"Action\":\"lambda:CreateFunction\",\"Resource\":\"*\"}]}",
+      "expected": {"R6": "critical"}
+    },
+    {
+      "id": "R6-scoped-passrole-to-readonly-clean",
+      "rule_focus": "R6",
+      "type": "role",
+      "name": "deployer-pass-readonly",
+      "owner": "devops",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"iam:PassRole\",\"Resource\":\"arn:aws:iam::111122223333:role/readonly-metrics-exec\",\"Condition\":{\"StringEquals\":{\"iam:PassedToService\":\"lambda.amazonaws.com\"}}},{\"Effect\":\"Allow\",\"Action\":\"lambda:CreateFunction\",\"Resource\":\"*\"}]}",
+      "expected": {}
+    },
+    {
+      "id": "R6-scoped-assumerole-to-privileged-target",
+      "rule_focus": "R6",
+      "type": "role",
+      "name": "pivot-to-admin",
+      "owner": "platform",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRole\",\"Resource\":\"arn:aws:iam::111122223333:role/prod-admin-exec\"}]}",
+      "expected": {"R6": "critical"}
+    },
+    {
+      "id": "R6-scoped-assumerole-to-readonly-clean",
+      "rule_focus": "R6",
+      "type": "role",
+      "name": "pivot-to-readonly",
+      "owner": "platform",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRole\",\"Resource\":\"arn:aws:iam::111122223333:role/readonly-metrics-exec\"}]}",
+      "expected": {}
+    },
+    {
+      "id": "R6-direct-iam-escalation-blocked-by-boundary",
+      "rule_focus": "R6",
+      "type": "role",
+      "name": "bounded-no-privesc",
+      "owner": "secops",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"iam:AttachRolePolicy\",\"iam:PassRole\"],\"Resource\":\"*\"}]}",
+      "boundary_doc": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"*\"}]}",
+      "expected": {}
+    },
+    {
+      "id": "R6-direct-iam-escalation-blocked-by-scp",
+      "rule_focus": "R6",
+      "type": "role",
+      "name": "scp-blocked-privesc",
+      "owner": "secops",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"iam:PutRolePolicy\",\"Resource\":\"*\"}]}",
+      "scp_doc": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"*\",\"Resource\":\"*\"},{\"Effect\":\"Deny\",\"Action\":\"iam:PutRolePolicy\",\"Resource\":\"*\"}]}",
+      "expected": {}
+    },
+    {
+      "id": "R6-self-escalation-scoped-arn",
+      "rule_focus": "R6",
+      "type": "role",
+      "name": "self-policy-mutator",
+      "owner": "secops",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"iam:PutRolePolicy\",\"Resource\":\"arn:aws:iam::111122223333:role/self-policy-mutator\"}]}",
+      "expected": {"R6": "critical"}
+    },
+    {
+      "id": "R7-secretsmanager-wildcard-unconditioned",
+      "rule_focus": "R7",
+      "type": "role",
+      "name": "secrets-wildcard-role",
+      "owner": "app",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"secretsmanager:GetSecretValue\",\"Resource\":\"*\"}]}",
+      "expected": {"R7": "high"}
+    },
+    {
+      "id": "R7-secretsmanager-blocked-by-scp",
+      "rule_focus": "R7",
+      "type": "role",
+      "name": "secrets-scp-denied",
+      "owner": "app",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"secretsmanager:GetSecretValue\",\"Resource\":\"*\"}]}",
+      "scp_doc": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"*\",\"Resource\":\"*\"},{\"Effect\":\"Deny\",\"Action\":\"secretsmanager:*\",\"Resource\":\"*\"}]}",
+      "expected": {}
+    },
+    {
+      "id": "R7-bedrock-conditioned-by-boundary",
+      "rule_focus": "R7",
+      "type": "role",
+      "name": "bedrock-cond-boundary",
+      "owner": "ai-platform",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"bedrock:*\",\"Resource\":\"*\"}]}",
+      "boundary_doc": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"bedrock:*\",\"Resource\":\"*\",\"Condition\":{\"StringEquals\":{\"aws:RequestedRegion\":\"us-east-1\"}}}]}",
+      "expected": {"R7": "medium"}
+    },
+    {
+      "id": "R7-bedrock-scoped-invoke-clean",
+      "rule_focus": "R7",
+      "type": "role",
+      "name": "bedrock-scoped-clean",
+      "owner": "ai-platform",
+      "inline_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"bedrock:InvokeModel\",\"Resource\":\"arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-*\"}]}",
+      "expected": {}
+    },
+    {
+      "id": "R3-unowned-nonhuman-role",
+      "rule_focus": "R3",
+      "type": "role",
+      "name": "orphan-batch-role",
+      "owner": "",
+      "expected": {"R3": "medium"}
+    },
+    {
+      "id": "R8-user-dual-active-keys",
+      "rule_focus": "R8",
+      "type": "user",
+      "name": "legacy-ci-user",
+      "owner": "devops",
+      "has_console_login": false,
+      "active_keys": ["AKIA1111111111111111", "AKIA2222222222222222"],
+      "expected": {"R8": "medium"}
+    },
+    {
+      "id": "R4-R8-key-never-used-15d-and-clean-age",
+      "rule_focus": "R8",
+      "type": "key",
+      "name": "AKIA3333333333333333",
+      "owner": "devops",
+      "key_age_days": 15,
+      "key_status": "Active",
+      "expected": {"R8": "medium"}
+    }
+  ]
+}

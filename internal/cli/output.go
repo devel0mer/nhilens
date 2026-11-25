@@ -68,6 +68,9 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 	} else {
 		_, _ = fmt.Fprintf(w, "  CloudTrail: %s\n", run.CloudTrailStatus)
 	}
+	if run.Coverage != nil {
+		_, _ = fmt.Fprintf(w, "  Coverage:   %s\n", formatCoverageLine(run.Coverage))
+	}
 	if dbPath != "" {
 		_, _ = fmt.Fprintf(w, "  Saved DB:   %s\n", dbPath)
 	}
@@ -134,17 +137,54 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 }
 
 func formatFindingsSummary(id model.Identity) string {
+	suffix := ""
+	if id.CoverageStatus == model.CoverageStatusPartial || len(id.DataGaps) > 0 {
+		suffix = " [partial]"
+	}
 	if len(id.Findings) == 0 {
 		if id.IsServiceLinkedRole {
 			return "[service-linked]"
 		}
-		return "none"
+		return "none" + suffix
 	}
 	parts := make([]string, 0, len(id.Findings))
 	for _, f := range id.Findings {
 		parts = append(parts, fmt.Sprintf("%s(%s)", f.RuleID, f.Severity))
 	}
-	return strings.Join(parts, ", ")
+	return strings.Join(parts, ", ") + suffix
+}
+
+func formatCoverageLine(cov *model.ScanCoverage) string {
+	if cov == nil {
+		return "unknown"
+	}
+	status := strings.ToUpper(cov.Status)
+	if status == "" {
+		status = "COMPLETE"
+	}
+	var details []string
+	if cov.LoginProfileChecked > 0 {
+		okCount := cov.LoginProfileChecked - cov.LoginProfileFailed
+		details = append(details, fmt.Sprintf("login_profile %d/%d ok", okCount, cov.LoginProfileChecked))
+	}
+	if cov.AccessAdvisorSkipped {
+		details = append(details, "access_advisor skipped")
+	} else if cov.AccessAdvisorAttempted > 0 {
+		details = append(details, fmt.Sprintf("access_advisor %d/%d ok", cov.AccessAdvisorSucceeded, cov.AccessAdvisorAttempted))
+	}
+	if cov.CloudTrailTruncated {
+		details = append(details, fmt.Sprintf("cloudtrail capped at %d events", cov.CloudTrailEventLimit))
+	}
+	if cov.SCPPoliciesLoaded > 0 {
+		details = append(details, fmt.Sprintf("%d SCP(s)", cov.SCPPoliciesLoaded))
+	}
+	if cov.PartialIdentities > 0 {
+		details = append(details, fmt.Sprintf("%d partial identity(ies) — missing data is not zero risk", cov.PartialIdentities))
+	}
+	if len(details) == 0 {
+		return status
+	}
+	return fmt.Sprintf("%s (%s)", status, strings.Join(details, "; "))
 }
 
 func formatScoreBreakdown(id model.Identity) string {

@@ -100,6 +100,7 @@ func ParseAndSummarize(ident *model.Identity) []string {
 	if strings.TrimSpace(ident.TrustPolicyRaw) != "" {
 		principals, err := ParseTrustPolicy(ident.TrustPolicyRaw)
 		if err != nil {
+			ident.AddDataGap("policy_parse_failed")
 			warnings = append(warnings, fmt.Sprintf("%s %s: parse trust policy: %v", ident.Type, ident.Name, err))
 		} else {
 			ident.TrustPrincipals = principals
@@ -122,6 +123,7 @@ func ParseAndSummarize(ident *model.Identity) []string {
 		if att.Parsed == nil && strings.TrimSpace(att.RawDocument) != "" {
 			parsed, err := ParseDocument(att.RawDocument)
 			if err != nil {
+				ident.AddDataGap("policy_parse_failed")
 				warnings = append(warnings, fmt.Sprintf("%s %s: parse policy %q: %v", ident.Type, ident.Name, att.Name, err))
 				continue
 			}

@@ -26,7 +26,7 @@ Run `nhilens explain` in your terminal to list all rules, or `nhilens explain <R
 - **Nuance & context**:
   - Explicit IAM escalation paths (`iam:PassRole`, `sts:AssumeRole`, `iam:AttachRolePolicy`, etc.) are evaluated cleanly by **R6** without duplicate scoring.
   - Scoped service wildcards (e.g., `s3:*`), `Action: "*"` restricted to a specific resource ARN, and `Deny` statements do not trigger R1.
-  - If an IAM permissions boundary is attached or an optional `--scp-file` JSON guardrail is provided, R1 intersects them against admin-wildcard statements: when the guardrail caps full wildcard access (`Action: "*"` / `iam:*`), R1 downgrades the finding to `medium` and records the capping guardrail in evidence. Full action-level SCP/boundary intersections, resource policies, and session policies are not evaluated.
+  - If an IAM permissions boundary is attached, an explicit identity `Deny` is present, or an optional `--scp-file` JSON guardrail is provided, R1/R6/R7 evaluate effective permissions at the action level (including `Allow`, `NotAction`, and unconditioned `Deny` intersections). For R1, when a boundary or SCP caps full admin wildcard access (`Action: "*"` / `iam:*`), R1 downgrades to `medium` and records the capping guardrail in evidence. Resource-based policies (e.g., S3/KMS) and STS session policies are not evaluated.
 - **Remediation**: Replace `AdministratorAccess`, `NotAction`, `iam:*`, or wildcard `Action`/`Resource` statements with least-privilege policies scoped to specific actions and ARNs, and attach a permissions boundary where appropriate.
 
 ### R2 — `unused-permissions`
@@ -76,20 +76,20 @@ Run `nhilens explain` in your terminal to list all rules, or `nhilens explain <R
 - **Remediation**: Restrict `Principal` to specific trusted ARNs/services; require `sts:ExternalId` on external cross-account trusts; pin both `sub` and `aud` (`sts.amazonaws.com`) for GitHub/GitLab/EKS OIDC; enforce `aud`/`amr` for Cognito and `SAML:aud` for SAML; and add `aws:SourceAccount` or `aws:SourceArn` on confused-deputy-prone service trusts.
 
 ### R6 — `privilege-escalation-path`
-- **Severity**: `critical` (direct unconditioned IAM escalation or `iam:PassRole` + compute/AI launch) or `high` (conditioned escalation, standalone `iam:PassRole` on `*`, or `sts:AssumeRole` on `*`)
+- **Severity**: `critical` (effective direct unconditioned IAM escalation, scoped `iam:PassRole` to a privileged target role + compute/AI launch, or scoped/wildcard `sts:AssumeRole` reaching an assumable privileged role) or `high` (conditioned escalation, standalone wildcard `iam:PassRole`, or wildcard `sts:AssumeRole`)
 - **Applies to**: Non-human `role` and `user` identities.
-- **Triggers when**:
-  - Explicit IAM mutation/credential actions (`iam:CreatePolicyVersion`, `iam:SetDefaultPolicyVersion`, `iam:AttachRolePolicy`, `iam:AttachUserPolicy`, `iam:AttachGroupPolicy`, `iam:PutRolePolicy`, `iam:PutUserPolicy`, `iam:PutGroupPolicy`, `iam:CreateAccessKey`, `iam:CreateLoginProfile`, `iam:UpdateLoginProfile`, `iam:UpdateAssumeRolePolicy`, `iam:AddUserToGroup`) on `Resource: "*"`
-  - `iam:PassRole` on `Resource: "*"` without `iam:PassedToService` (escalates to `critical` if paired with compute/AI launch actions like `lambda:CreateFunction`, `ec2:RunInstances`, `ecs:RunTask`, `bedrock:CreateAgent`, `sagemaker:CreateNotebookInstance`, `codebuild:CreateProject`)
-  - `sts:AssumeRole` on `Resource: "*"` (unbounded role chaining)
-- **Guardrails**: Ignores full `Action: "*"` / `iam:*` statements already caught by R1 so admin roles are not double-scored.
+- **Triggers when** (after action-level intersection with explicit Denies, attached Permissions Boundaries, and optional `--scp-file` SCPs):
+  - Explicit IAM mutation/credential actions (`iam:CreatePolicyVersion`, `iam:SetDefaultPolicyVersion`, `iam:AttachRolePolicy`, `iam:AttachUserPolicy`, `iam:AttachGroupPolicy`, `iam:PutRolePolicy`, `iam:PutUserPolicy`, `iam:PutGroupPolicy`, `iam:CreateAccessKey`, `iam:CreateLoginProfile`, `iam:UpdateLoginProfile`, `iam:UpdateAssumeRolePolicy`, `iam:AddUserToGroup`) on `Resource: "*"`, wildcard IAM ARNs, self ARN (self-escalation), or privileged target role ARNs in the same account
+  - `iam:PassRole` evaluated across both wildcard and scoped role ARNs, `iam:PassedToService`, effective compute/AI launch actions (`lambda:CreateFunction`, `ec2:RunInstances`, `ecs:RunTask`, `bedrock:CreateAgent`, `sagemaker:CreateNotebookInstance`, `codebuild:CreateProject`, etc.), and target-role privilege & trust profiles (scoped `PassRole` to low-privilege/read-only roles does not emit false alarms; scoped `PassRole` to privileged roles + launch escalates to `critical`)
+  - `sts:AssumeRole` evaluated across both wildcard and scoped role ARNs against target-role permissions and trust policies (scoped `AssumeRole` to read-only roles does not emit false alarms; scoped `AssumeRole` into an assumable privileged role escalates to `critical`/`high`)
+- **Guardrails**: Ignores full `Action: "*"` / `iam:*` statements already caught by R1 so admin roles are not double-scored; suppresses paths blocked by explicit `Deny`, attached Permissions Boundaries, or provided SCPs.
 - **Config knobs**: `rules.enabled.R6`.
 
 ### R7 — `sensitive-service-wildcard`
-- **Severity**: `high` (unconditioned) or `medium` (conditioned)
+- **Severity**: `high` (unconditioned) or `medium` (conditioned by identity policy, boundary, or SCP)
 - **Applies to**: Non-human `role` and `user` identities.
-- **Triggers when**: Unconditioned `Resource: "*"` allows broad secret/key access (`kms:*`, `kms:Decrypt`, `secretsmanager:*`, `secretsmanager:GetSecretValue`, `ssm:*`, `ssm:GetParameter*`) or unrestricted AI control planes (`bedrock:*`, `sagemaker:*`).
-- **Guardrails**: Ignores full `Action: "*"` statements already covered by R1.
+- **Triggers when**: Effective permissions (after action-level intersection with explicit Denies, attached Permissions Boundaries, and optional `--scp-file` SCPs) allow broad secret/key access (`kms:*`, `kms:Decrypt`, `secretsmanager:*`/`GetSecretValue`, `ssm:*`/`GetParameter*`) or unrestricted AI control planes (`bedrock:*`, `sagemaker:*`) on `Resource: "*"`.
+- **Guardrails**: Ignores full `Action: "*"` statements already covered by R1; suppresses actions blocked by explicit `Deny`, Permissions Boundary, or SCP.
 - **Config knobs**: `rules.enabled.R7`.
 
 ### R8 — `key-hygiene`

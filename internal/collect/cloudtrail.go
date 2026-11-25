@@ -119,12 +119,23 @@ func (c *CloudTrailCollector) Enrich(ctx context.Context, run *model.ScanRun) {
 		return
 	}
 
+	if run.Coverage == nil {
+		run.Coverage = &model.ScanCoverage{
+			AccountID:   run.AccountID,
+			Region:      run.Region,
+			SinceWindow: run.SinceWindow,
+		}
+	}
+	run.Coverage.CloudTrailEventLimit = c.opts.MaxEvents
+
 	if c.opts.MaxEvents == 0 {
 		setCloudTrailStatus(run, model.CloudTrailStatusDisabled)
+		run.Coverage.CloudTrailStatus = model.CloudTrailStatusDisabled
 		return
 	}
 	if c.client == nil {
 		setCloudTrailStatus(run, model.CloudTrailStatusUnknown)
+		run.Coverage.CloudTrailStatus = model.CloudTrailStatusUnknown
 		return
 	}
 
@@ -179,6 +190,7 @@ func (c *CloudTrailCollector) Enrich(ctx context.Context, run *model.ScanRun) {
 		nextToken *string
 		fetched   int
 		status    = model.CloudTrailStatusOK
+		truncated bool
 		pageNum   int
 	)
 
@@ -228,6 +240,7 @@ func (c *CloudTrailCollector) Enrich(ctx context.Context, run *model.ScanRun) {
 		}
 		if fetched >= c.opts.MaxEvents {
 			status = model.CloudTrailStatusPartial
+			truncated = true
 			run.Warnings = append(run.Warnings, fmt.Sprintf("CloudTrail lookup reached --max-events=%d cap; attribution may be incomplete", c.opts.MaxEvents))
 			break
 		}
@@ -236,6 +249,17 @@ func (c *CloudTrailCollector) Enrich(ctx context.Context, run *model.ScanRun) {
 
 	run.CloudTrailEventCount = fetched
 	setCloudTrailStatus(run, status)
+	run.Coverage.CloudTrailStatus = status
+	run.Coverage.CloudTrailEventsAnalyzed = fetched
+	run.Coverage.CloudTrailTruncated = truncated
+	if status == model.CloudTrailStatusPartial || status == model.CloudTrailStatusUnknown {
+		gap := "cloudtrail_" + status
+		for i := range run.Identities {
+			if !run.Identities[i].IsServiceLinkedRole {
+				run.Identities[i].AddDataGap(gap)
+			}
+		}
+	}
 
 	for idx, a := range acc {
 		ident := &run.Identities[idx]

@@ -82,15 +82,16 @@ type Limitation struct {
 
 // ReportData is the complete structured model rendered to static HTML or JSON.
 type ReportData struct {
-	GeneratedAt time.Time        `json:"generated_at"`
-	ToolVersion string           `json:"tool_version"`
-	Summary     SummaryStats     `json:"summary"`
-	TopRisky    []model.Identity `json:"top_risky"`
-	RuleGroups  []RuleGroup      `json:"rule_groups"`
-	Graph       GraphData        `json:"graph"`
-	Warnings    []string         `json:"warnings,omitempty"`
-	Limitations []Limitation     `json:"limitations"`
-	Scan        *model.ScanRun   `json:"scan"`
+	GeneratedAt time.Time          `json:"generated_at"`
+	ToolVersion string             `json:"tool_version"`
+	Summary     SummaryStats       `json:"summary"`
+	Coverage    model.ScanCoverage `json:"coverage"`
+	TopRisky    []model.Identity   `json:"top_risky"`
+	RuleGroups  []RuleGroup        `json:"rule_groups"`
+	Graph       GraphData          `json:"graph"`
+	Warnings    []string           `json:"warnings,omitempty"`
+	Limitations []Limitation       `json:"limitations"`
+	Scan        *model.ScanRun     `json:"scan"`
 }
 
 type htmlTemplateData struct {
@@ -255,11 +256,13 @@ func Build(run *model.ScanRun, generatedAt time.Time) *ReportData {
 
 	ruleGroups := buildRuleGroups(ranked)
 	graph := BuildGraph(run)
+	coverage := resolveScanCoverage(run, summary)
 
 	return &ReportData{
 		GeneratedAt: generatedAt.UTC(),
 		ToolVersion: version.String(),
 		Summary:     summary,
+		Coverage:    coverage,
 		TopRisky:    topRisky,
 		RuleGroups:  ruleGroups,
 		Graph:       graph,
@@ -267,6 +270,54 @@ func Build(run *model.ScanRun, generatedAt time.Time) *ReportData {
 		Limitations: defaultLimitations(run),
 		Scan:        run,
 	}
+}
+
+func resolveScanCoverage(run *model.ScanRun, summary SummaryStats) model.ScanCoverage {
+	if run.Coverage != nil {
+		cov := *run.Coverage
+		if cov.AccountID == "" {
+			cov.AccountID = run.AccountID
+		}
+		if cov.Region == "" {
+			cov.Region = run.Region
+		}
+		if cov.SinceWindow == "" {
+			cov.SinceWindow = run.SinceWindow
+		}
+		if cov.CloudTrailStatus == "" {
+			cov.CloudTrailStatus = run.CloudTrailStatus
+		}
+		if cov.Status == "" {
+			cov.Status = model.CoverageStatusComplete
+		}
+		return cov
+	}
+
+	cov := model.ScanCoverage{
+		Status:                     model.CoverageStatusComplete,
+		AccountID:                  run.AccountID,
+		Region:                     run.Region,
+		SinceWindow:                run.SinceWindow,
+		CloudTrailStatus:           run.CloudTrailStatus,
+		CloudTrailEventsAnalyzed:   run.CloudTrailEventCount,
+		ServiceLinkedRolesExcluded: summary.ServiceLinkedRoles,
+	}
+	for _, id := range run.Identities {
+		if id.CoverageStatus == model.CoverageStatusPartial || len(id.DataGaps) > 0 {
+			cov.PartialIdentities++
+		}
+		if id.ServiceLastAccessedError != "" {
+			cov.AccessAdvisorFailed++
+		}
+	}
+	cov.CollectionErrorCount = cov.AccessAdvisorFailed
+	if cov.PartialIdentities > 0 || cov.CollectionErrorCount > 0 ||
+		cov.CloudTrailStatus == model.CloudTrailStatusPartial ||
+		cov.CloudTrailStatus == model.CloudTrailStatusUnknown ||
+		cov.CloudTrailStatus == model.CloudTrailStatusDisabled {
+		cov.Status = model.CoverageStatusPartial
+	}
+	return cov
 }
 
 // WriteHTML renders a standalone static HTML report with embedded Cytoscape.js (no CDN at view time).
@@ -403,8 +454,8 @@ func defaultLimitations(run *model.ScanRun) []Limitation {
 			Detail: "Service last-accessed data (R2) covers only the trailing 400 days, may lag by up to several hours, and can be unavailable if --skip-service-last-accessed was passed or an async job failed/timed out. Newly created identities may show unused services simply because they have not been active for the full stale window.",
 		},
 		{
-			Title:  "Identity-policy upper bound (permissions boundaries, SCPs, resource & session policies)",
-			Detail: "Permission summaries reflect attached managed, inline, and group identity policies. Attached permissions boundaries (when resolved in IAM authorization details) and optional --scp-file JSON guardrails are intersected for R1 admin-wildcard capping, but full action-level SCP/boundary intersections, resource-based policies (e.g., S3/KMS), and STS session policies are not evaluated.",
+			Title:  "Effective permissions scope (boundaries, SCPs, resource & session policies)",
+			Detail: "Permission rules (R1, R6, R7) intersect attached managed, inline, and group identity policies at the action level against explicit Denies, resolved IAM permissions boundaries, and optional --scp-file JSON guardrails (and correlate same-account target-role permissions for R6 PassRole/AssumeRole). Resource-based policies (e.g., S3/KMS), unsupplied AWS Organizations SCPs, and STS session policies are not evaluated.",
 		},
 		{
 			Title:  "Service-linked roles & point-in-time snapshot",

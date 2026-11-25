@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS scans (
 	since_window           TEXT NOT NULL,
 	cloudtrail_status      TEXT NOT NULL,
 	cloudtrail_event_count INTEGER NOT NULL,
-	warnings_json          TEXT NOT NULL
+	warnings_json          TEXT NOT NULL,
+	coverage_json          TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS identities (
@@ -142,6 +143,10 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("initialize schema: %w", err)
 	}
+	if err := ensureColumn(db, "scans", "coverage_json", "TEXT NOT NULL DEFAULT '{}'"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("migrate scans.coverage_json: %w", err)
+	}
 
 	if !isMemory {
 		// Ensure WAL/SHM sidecar files created by SQLite are also owner-only (0600).
@@ -177,6 +182,14 @@ func (s *Store) SaveScan(ctx context.Context, run *model.ScanRun) error {
 	if err != nil {
 		return fmt.Errorf("marshal warnings: %w", err)
 	}
+	coverageJSON := "{}"
+	if run.Coverage != nil {
+		rawCov, err := json.Marshal(run.Coverage)
+		if err != nil {
+			return fmt.Errorf("marshal coverage: %w", err)
+		}
+		coverageJSON = string(rawCov)
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -195,8 +208,8 @@ func (s *Store) SaveScan(ctx context.Context, run *model.ScanRun) error {
 		INSERT INTO scans (
 			id, account_id, caller_arn, region, profile,
 			started_at, completed_at, since_window,
-			cloudtrail_status, cloudtrail_event_count, warnings_json
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			cloudtrail_status, cloudtrail_event_count, warnings_json, coverage_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		run.ID,
 		run.AccountID,
 		run.CallerARN,
@@ -208,6 +221,7 @@ func (s *Store) SaveScan(ctx context.Context, run *model.ScanRun) error {
 		run.CloudTrailStatus,
 		run.CloudTrailEventCount,
 		string(warningsJSON),
+		coverageJSON,
 	)
 	if err != nil {
 		return fmt.Errorf("insert scan: %w", err)
@@ -308,12 +322,13 @@ func (s *Store) LoadScan(ctx context.Context, scanID string) (*model.ScanRun, er
 		startedStr   string
 		completedStr string
 		warningsJSON string
+		coverageJSON string
 	)
 
 	err := s.db.QueryRowContext(ctx, `
 		SELECT id, account_id, caller_arn, region, profile,
 		       started_at, completed_at, since_window,
-		       cloudtrail_status, cloudtrail_event_count, warnings_json
+		       cloudtrail_status, cloudtrail_event_count, warnings_json, coverage_json
 		FROM scans
 		WHERE id = ?`, scanID,
 	).Scan(
@@ -328,6 +343,7 @@ func (s *Store) LoadScan(ctx context.Context, scanID string) (*model.ScanRun, er
 		&run.CloudTrailStatus,
 		&run.CloudTrailEventCount,
 		&warningsJSON,
+		&coverageJSON,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -347,6 +363,13 @@ func (s *Store) LoadScan(ctx context.Context, scanID string) (*model.ScanRun, er
 	}
 	if len(run.Warnings) == 0 {
 		run.Warnings = nil
+	}
+	if trimmedCov := strings.TrimSpace(coverageJSON); trimmedCov != "" && trimmedCov != "{}" && trimmedCov != "null" {
+		var cov model.ScanCoverage
+		if err := json.Unmarshal([]byte(trimmedCov), &cov); err != nil {
+			return nil, fmt.Errorf("unmarshal coverage: %w", err)
+		}
+		run.Coverage = &cov
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
@@ -435,4 +458,34 @@ func nonNilSlice(in []string) []string {
 		return []string{}
 	}
 	return in
+}
+
+func ensureColumn(db *sql.DB, table, col, colDef string) error {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			colType   string
+			notNull   int
+			dfltValue sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return err
+		}
+		if strings.EqualFold(name, col) {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, col, colDef))
+	return err
 }

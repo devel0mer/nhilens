@@ -12,6 +12,7 @@ import (
 	"github.com/devel0mer/nhilens/internal/collect"
 	"github.com/devel0mer/nhilens/internal/config"
 	"github.com/devel0mer/nhilens/internal/detect"
+	"github.com/devel0mer/nhilens/internal/model"
 	"github.com/devel0mer/nhilens/internal/policy"
 	"github.com/devel0mer/nhilens/internal/report"
 	"github.com/devel0mer/nhilens/internal/rules"
@@ -138,9 +139,11 @@ func runScan(ctx context.Context, stdout io.Writer, opts *ScanOptions, deps Scan
 	}
 
 	cOpts := collect.Options{
-		OwnerTagKeys:            opts.Config.AgentDetection.OwnerTagKeys,
-		SkipServiceLastAccessed: opts.SkipServiceLastAccessed,
-		Now:                     nowFn,
+		OwnerTagKeys:              opts.Config.AgentDetection.OwnerTagKeys,
+		MaxConcurrency:            opts.Config.AWS.MaxConcurrency,
+		SkipServiceLastAccessed:   opts.SkipServiceLastAccessed,
+		IncludeServiceLinkedRoles: opts.IncludeServiceLinkedRoles,
+		Now:                       nowFn,
 	}
 	if deps.CollectorHooks != nil {
 		deps.CollectorHooks(&cOpts)
@@ -164,7 +167,8 @@ func runScan(ctx context.Context, stdout io.Writer, opts *ScanOptions, deps Scan
 	collect.NewCloudTrailCollector(ctClient, ctOpts).Enrich(ctx, run)
 
 	// Parse attached/inline/group policies and trust documents.
-	if parseWarnings := policy.ParseAll(run.Identities); len(parseWarnings) > 0 {
+	parseWarnings := policy.ParseAll(run.Identities)
+	if len(parseWarnings) > 0 {
 		run.Warnings = append(run.Warnings, parseWarnings...)
 		sort.Strings(run.Warnings)
 	}
@@ -183,6 +187,7 @@ func runScan(ctx context.Context, stdout io.Writer, opts *ScanOptions, deps Scan
 		suppress.Apply(run, suppFile, nowUTC)
 	}
 	score.ScoreAll(run.Identities, opts.Config)
+	finalizeScanCoverage(run, opts, len(scpPolicies), len(parseWarnings))
 
 	// Persist normalized results to SQLite before printing output or evaluating --fail-on.
 	st, err := store.Open(opts.DBPath)
@@ -226,6 +231,83 @@ func runScan(ctx context.Context, stdout io.Writer, opts *ScanOptions, deps Scan
 	}
 
 	return nil
+}
+
+func finalizeScanCoverage(run *model.ScanRun, opts *ScanOptions, scpCount, parseErrCount int) {
+	if run == nil {
+		return
+	}
+	if run.Coverage == nil {
+		run.Coverage = &model.ScanCoverage{}
+	}
+	cov := run.Coverage
+	cov.AccountID = run.AccountID
+	cov.Region = run.Region
+	cov.SinceWindow = run.SinceWindow
+	cov.CloudTrailStatus = run.CloudTrailStatus
+	cov.CloudTrailEventsAnalyzed = run.CloudTrailEventCount
+	if opts != nil {
+		cov.CloudTrailEventLimit = opts.MaxEvents
+		cov.AccessAdvisorSkipped = opts.SkipServiceLastAccessed
+	}
+	cov.PolicyParseErrors = parseErrCount
+	cov.SCPPoliciesLoaded = scpCount
+
+	var skipped []string
+	if opts != nil {
+		if opts.SkipServiceLastAccessed {
+			skipped = append(skipped, "Access Advisor / R2 (--skip-service-last-accessed)")
+		}
+		if opts.MaxEvents == 0 {
+			skipped = append(skipped, "CloudTrail attribution (--max-events=0)")
+		}
+		if opts.Config != nil {
+			for _, meta := range rules.Catalog() {
+				if !opts.Config.IsRuleEnabled(meta.ID) {
+					skipped = append(skipped, fmt.Sprintf("%s (%s) disabled in config", meta.ID, meta.Name))
+				}
+			}
+		}
+	}
+
+	slrExcluded := 0
+	partialCount := 0
+	for i := range run.Identities {
+		id := &run.Identities[i]
+		if id.IsServiceLinkedRole && (opts == nil || !opts.IncludeServiceLinkedRoles) {
+			slrExcluded++
+		}
+		if len(id.DataGaps) > 0 {
+			id.CoverageStatus = model.CoverageStatusPartial
+			partialCount++
+		} else {
+			id.CoverageStatus = model.CoverageStatusComplete
+		}
+	}
+	if slrExcluded > 0 {
+		skipped = append(skipped, fmt.Sprintf("%d AWS service-linked role(s) excluded by default", slrExcluded))
+	}
+	cov.ServiceLinkedRolesExcluded = slrExcluded
+	cov.PartialIdentities = partialCount
+	cov.SkippedChecks = skipped
+	cov.CollectionErrorCount = cov.LoginProfileFailed +
+		cov.AccessKeyListFailed +
+		cov.AccessKeyLastUsedFailed +
+		cov.AccessAdvisorFailed +
+		cov.PolicyParseErrors
+
+	isPartial := cov.CollectionErrorCount > 0 ||
+		cov.PartialIdentities > 0 ||
+		cov.AccessAdvisorSkipped ||
+		cov.CloudTrailTruncated ||
+		cov.CloudTrailStatus == model.CloudTrailStatusPartial ||
+		cov.CloudTrailStatus == model.CloudTrailStatusUnknown ||
+		cov.CloudTrailStatus == model.CloudTrailStatusDisabled
+	if isPartial {
+		cov.Status = model.CoverageStatusPartial
+	} else {
+		cov.Status = model.CoverageStatusComplete
+	}
 }
 
 func buildScanOptions(

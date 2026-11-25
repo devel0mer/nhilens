@@ -37,6 +37,34 @@ func WriteMarkdown(w io.Writer, run *model.ScanRun) error {
 	}
 	_, _ = fmt.Fprintf(w, "| CloudTrail Attribution | `%s` (%d events, `%s` window) |\n\n", s.CloudTrailStatus, s.CloudTrailEventCount, s.SinceWindow)
 
+	cov := data.Coverage
+	_, _ = fmt.Fprintf(w, "## Scan Coverage\n\n")
+	if cov.Status == model.CoverageStatusPartial {
+		_, _ = fmt.Fprintf(w, "> **Partial scan coverage:** Some enrichment signals were unavailable, capped, or skipped. Missing data must not be interpreted as zero risk.\n\n")
+	}
+	_, _ = fmt.Fprintf(w, "| Coverage Dimension | Details |\n|---|---|\n")
+	_, _ = fmt.Fprintf(w, "| Overall Status | **`%s`** (%d partial identity(ies), %d collection error(s)) |\n", cov.Status, cov.PartialIdentities, cov.CollectionErrorCount)
+	_, _ = fmt.Fprintf(w, "| Scope | Account `%s`, region `%s`, window `%s` |\n", cov.AccountID, cov.Region, cov.SinceWindow)
+	ctLim := "unlimited"
+	if cov.CloudTrailEventLimit > 0 {
+		ctLim = fmt.Sprintf("max %d events (truncated=%t)", cov.CloudTrailEventLimit, cov.CloudTrailTruncated)
+	} else if cov.CloudTrailStatus == model.CloudTrailStatusDisabled {
+		ctLim = "disabled (--max-events=0)"
+	}
+	_, _ = fmt.Fprintf(w, "| CloudTrail | `%s` — %d event(s) analyzed (%s) |\n", cov.CloudTrailStatus, cov.CloudTrailEventsAnalyzed, ctLim)
+	_, _ = fmt.Fprintf(w, "| IAM Login Profiles | %d checked, %d failed |\n", cov.LoginProfileChecked, cov.LoginProfileFailed)
+	if cov.AccessAdvisorSkipped {
+		_, _ = fmt.Fprintf(w, "| Access Advisor (R2) | skipped (`--skip-service-last-accessed`) |\n")
+	} else {
+		_, _ = fmt.Fprintf(w, "| Access Advisor (R2) | %d attempted, %d succeeded, %d failed (%d SLR / %d no-policy skipped) |\n",
+			cov.AccessAdvisorAttempted, cov.AccessAdvisorSucceeded, cov.AccessAdvisorFailed, cov.AccessAdvisorSkippedSLR, cov.AccessAdvisorSkippedNoPolicy)
+	}
+	_, _ = fmt.Fprintf(w, "| Guardrails / Exclusions | %d SCP file policy(ies); %d AWS service-linked role(s) excluded |\n", cov.SCPPoliciesLoaded, cov.ServiceLinkedRolesExcluded)
+	if len(cov.SkippedChecks) > 0 {
+		_, _ = fmt.Fprintf(w, "| Skipped Checks | %s |\n", strings.Join(cov.SkippedChecks, "; "))
+	}
+	_, _ = fmt.Fprintln(w)
+
 	_, _ = fmt.Fprintf(w, "## Top 10 Risky Identities\n\n")
 	if len(data.TopRisky) == 0 {
 		_, _ = fmt.Fprintln(w, "No risky findings recorded in this scan.")

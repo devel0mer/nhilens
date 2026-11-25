@@ -102,8 +102,16 @@ func (r R1WildcardPermissions) Evaluate(ident *model.Identity, rctx Context) *mo
 		return nil
 	}
 
-	// Evaluate effective-permission guardrails (attached Permissions Boundary + optional SCPs).
+	// If an identity-level explicit Deny unconditionally blocks both wildcard admin and IAM control,
+	// cap R1 down to medium while noting the explicit Deny in evidence.
 	cappedByGuardrail := false
+	adminProbe := policy.EvaluateEffectiveAnyAction(ident, nil, []string{"iam:attachrolepolicy", "sts:assumerole", "s3:putobject", "kms:decrypt"}, "*")
+	if !adminProbe.Allowed && adminProbe.BlockedBy == "identity_deny" {
+		cappedByGuardrail = true
+		evidence = append(evidence, "effective access restricted by an explicit identity Deny statement (severity reduced to medium)")
+	}
+
+	// Evaluate effective-permission guardrails (attached Permissions Boundary + optional SCPs).
 	if ident.PermissionsBoundaryARN != "" {
 		if strings.TrimSpace(ident.PermissionsBoundaryDoc) != "" {
 			if parsedBoundary, err := policy.ParseDocument(ident.PermissionsBoundaryDoc); err == nil {

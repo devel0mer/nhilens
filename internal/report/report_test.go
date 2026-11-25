@@ -144,6 +144,7 @@ func TestWriteHTMLNoCDNAndXSSSafe(t *testing.T) {
 	for _, want := range []string{
 		"Review before sharing:",
 		"Summary",
+		"Scan Coverage &amp; Data Completeness",
 		"Top 10 Risky Identities",
 		"Findings by Rule",
 		"Identity, Trust &amp; Policy Relationship Graph",
@@ -151,7 +152,7 @@ func TestWriteHTMLNoCDNAndXSSSafe(t *testing.T) {
 		"Heuristic AI agent vs. automation classification",
 		"CloudTrail single-region, window, volume, and IP attribution limits",
 		"IAM Access Advisor (last-accessed) data gaps",
-		"Identity-policy upper bound",
+		"Effective permissions scope",
 		"123456789012",
 		"nhilens-graph-data",
 		"1 unflagged AWS service-linked roles omitted",

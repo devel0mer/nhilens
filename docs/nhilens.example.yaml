@@ -1,6 +1,8 @@
 # Example configuration for nhilens (all fields are optional; defaults shown below).
 aws:
   region: us-east-1
+  # Bounded worker concurrency for per-identity IAM enrichment (1..32; default 5 respects IAM rate limits).
+  max_concurrency: 5
 
 agent_detection:
   # Tag keys whose presence or matching values suggest an AI agent or automation identity.

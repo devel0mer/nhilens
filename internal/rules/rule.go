@@ -8,11 +8,13 @@ import (
 	"github.com/devel0mer/nhilens/internal/policy"
 )
 
-// Context provides read-only configuration, optional SCP guardrails, and reference clock to risk rules.
+// Context provides read-only configuration, optional SCP guardrails, same-account role index,
+// and reference clock to risk rules.
 type Context struct {
 	Config      *config.Config
 	Now         time.Time
 	SCPPolicies []policy.NamedPolicy
+	Roles       []*model.Identity
 }
 
 // Rule is the common interface implemented by every risk check.
@@ -56,6 +58,16 @@ func EvaluateAllWithContext(identities []model.Identity, rctx Context, rules ...
 	}
 	if len(rules) == 0 {
 		rules = DefaultRules()
+	}
+
+	if len(rctx.Roles) == 0 {
+		roles := make([]*model.Identity, 0)
+		for i := range identities {
+			if identities[i].Type == model.TypeRole {
+				roles = append(roles, &identities[i])
+			}
+		}
+		rctx.Roles = roles
 	}
 
 	activeRules := make([]Rule, 0, len(rules))

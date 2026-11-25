@@ -414,12 +414,13 @@ func TestServiceLastAccessedFailureAndTimeoutAreNonFatal(t *testing.T) {
 	failedARN := "arn:aws:iam::123456789012:role/failed-sla"
 	timeoutARN := "arn:aws:iam::123456789012:role/timeout-sla"
 
+	dummyPolicy := []iamtypes.AttachedPolicy{{PolicyName: aws.String("ReadOnly"), PolicyArn: aws.String("arn:aws:iam::aws:policy/ReadOnlyAccess")}}
 	mockIAM := &mockIAMClient{
 		authPages: []*iam.GetAccountAuthorizationDetailsOutput{
 			{
 				RoleDetailList: []iamtypes.RoleDetail{
-					{Arn: aws.String(failedARN), RoleName: aws.String("failed-sla")},
-					{Arn: aws.String(timeoutARN), RoleName: aws.String("timeout-sla")},
+					{Arn: aws.String(failedARN), RoleName: aws.String("failed-sla"), AttachedManagedPolicies: dummyPolicy},
+					{Arn: aws.String(timeoutARN), RoleName: aws.String("timeout-sla"), AttachedManagedPolicies: dummyPolicy},
 				},
 			},
 		},
@@ -469,6 +470,52 @@ func TestServiceLastAccessedFailureAndTimeoutAreNonFatal(t *testing.T) {
 		if ident.Name == "timeout-sla" && !strings.Contains(ident.ServiceLastAccessedError, "timed out") {
 			t.Errorf("unexpected error on timeout-sla: %q", ident.ServiceLastAccessedError)
 		}
+		if ident.CoverageStatus != model.CoverageStatusPartial || len(ident.DataGaps) == 0 || ident.DataGaps[0] != "access_advisor_failed" {
+			t.Errorf("expected partial coverage with access_advisor_failed on %s, got status=%q gaps=%v", ident.Name, ident.CoverageStatus, ident.DataGaps)
+		}
+	}
+	if run.Coverage == nil || run.Coverage.AccessAdvisorAttempted != 2 || run.Coverage.AccessAdvisorFailed != 2 {
+		t.Errorf("expected coverage AccessAdvisorAttempted=2, Failed=2, got %+v", run.Coverage)
+	}
+}
+
+func TestCollectSkipsAccessAdvisorForSLRsAndZeroPolicyIdentities(t *testing.T) {
+	mockIAM := &mockIAMClient{
+		authPages: []*iam.GetAccountAuthorizationDetailsOutput{
+			{
+				RoleDetailList: []iamtypes.RoleDetail{
+					{
+						Arn:      aws.String("arn:aws:iam::123456789012:role/aws-service-role/support.amazonaws.com/AWSServiceRoleForSupport"),
+						RoleName: aws.String("AWSServiceRoleForSupport"),
+						Path:     aws.String("/aws-service-role/support.amazonaws.com/"),
+						AttachedManagedPolicies: []iamtypes.AttachedPolicy{
+							{PolicyName: aws.String("AWSSupportServiceRolePolicy"), PolicyArn: aws.String("arn:aws:iam::aws:policy/aws-service-role/AWSSupportServiceRolePolicy")},
+						},
+					},
+					{
+						Arn:      aws.String("arn:aws:iam::123456789012:role/empty-role"),
+						RoleName: aws.String("empty-role"),
+						Path:     aws.String("/"),
+					},
+				},
+			},
+		},
+	}
+
+	collector := NewIAMCollector(
+		&mockSTSClient{account: "123456789012", arn: "arn:aws:iam::123456789012:role/auditor"},
+		mockIAM,
+		Options{MaxConcurrency: 2, Sleep: noopSleep},
+	)
+	run, err := collector.Collect(context.Background(), "", "us-east-1", "90d")
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+	if run.Coverage == nil {
+		t.Fatalf("expected non-nil Coverage")
+	}
+	if run.Coverage.AccessAdvisorAttempted != 0 || run.Coverage.AccessAdvisorSkippedSLR != 1 || run.Coverage.AccessAdvisorSkippedNoPolicy != 1 {
+		t.Errorf("unexpected Access Advisor skip counts: %+v", run.Coverage)
 	}
 }
 

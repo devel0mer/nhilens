@@ -255,6 +255,57 @@
     </div>
   </div>
 
+  <h2>Scan Coverage &amp; Data Completeness</h2>
+  <div class="panel">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px;">
+      <strong>Overall coverage:</strong>
+      <span class="badge {{if eq .Report.Coverage.Status "partial"}}sev-medium{{else}}sev-clean{{end}}">{{.Report.Coverage.Status}}</span>
+      {{if eq .Report.Coverage.Status "partial"}}
+      <span class="muted">Some checks failed, were capped, or were skipped &mdash; missing data does not mean zero findings.</span>
+      {{end}}
+    </div>
+    <table>
+      <tbody>
+        <tr>
+          <th style="width:220px;">Account / Region / Window</th>
+          <td class="mono">{{.Report.Coverage.AccountID}} &middot; {{.Report.Coverage.Region}} (regional CloudTrail) &middot; {{.Report.Coverage.SinceWindow}}</td>
+        </tr>
+        <tr>
+          <th>CloudTrail Events</th>
+          <td>
+            <span class="badge sev-info">{{.Report.Coverage.CloudTrailStatus}}</span>
+            {{.Report.Coverage.CloudTrailEventsAnalyzed}} analyzed
+            {{if gt .Report.Coverage.CloudTrailEventLimit 0}}(limit {{.Report.Coverage.CloudTrailEventLimit}}{{if .Report.Coverage.CloudTrailTruncated}}, <strong>truncated</strong>{{end}}){{end}}
+          </td>
+        </tr>
+        <tr>
+          <th>IAM Login Profiles</th>
+          <td>{{.Report.Coverage.LoginProfileChecked}} checked, {{.Report.Coverage.LoginProfileFailed}} failed</td>
+        </tr>
+        <tr>
+          <th>Access Advisor (R2)</th>
+          <td>
+            {{if .Report.Coverage.AccessAdvisorSkipped}}
+              <span class="badge sev-medium">skipped (--skip-service-last-accessed)</span>
+            {{else}}
+              {{.Report.Coverage.AccessAdvisorSucceeded}} / {{.Report.Coverage.AccessAdvisorAttempted}} succeeded ({{.Report.Coverage.AccessAdvisorFailed}} failed; {{.Report.Coverage.AccessAdvisorSkippedSLR}} excluded SLR, {{.Report.Coverage.AccessAdvisorSkippedNoPolicy}} zero-policy skipped)
+            {{end}}
+          </td>
+        </tr>
+        <tr>
+          <th>Guardrails &amp; Scope</th>
+          <td>{{.Report.Coverage.SCPPoliciesLoaded}} SCP guardrail policy(ies) loaded &middot; {{.Report.Coverage.ServiceLinkedRolesExcluded}} service-linked role(s) excluded &middot; {{.Report.Coverage.PartialIdentities}} partial identity(ies) &middot; {{.Report.Coverage.CollectionErrorCount}} collection error(s)</td>
+        </tr>
+        {{if .Report.Coverage.SkippedChecks}}
+        <tr>
+          <th>Skipped Checks</th>
+          <td>{{join .Report.Coverage.SkippedChecks "; "}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+
   {{if .Report.Warnings}}
   <div class="panel">
     <strong>Collection Warnings ({{len .Report.Warnings}})</strong>
@@ -316,8 +367,9 @@
             {{if gt .RawRiskPoints 0.0}}<div class="muted mono" style="margin-top:4px;">raw {{scoreFmt .RawRiskPoints}}</div>{{end}}
           </td>
           <td>
-            <div><strong>{{.Name}}</strong> <span class="badge sev-info">{{.Type}}</span></div>
+            <div><strong>{{.Name}}</strong> <span class="badge sev-info">{{.Type}}</span>{{if eq .CoverageStatus "partial"}} <span class="badge sev-medium" title="Partial enrichment data">partial</span>{{end}}</div>
             <div class="mono muted">{{.ARN}}</div>
+            {{if .DataGaps}}<div class="muted">Coverage gaps: <span class="mono">{{join .DataGaps ", "}}</span></div>{{end}}
             {{if .AIServices}}<div class="muted">AI services: <span class="mono">{{join .AIServices ", "}}</span></div>{{end}}
             {{if .PermissionsBoundaryARN}}<div class="muted">Boundary: <span class="mono">{{shortARN .PermissionsBoundaryARN}}</span></div>{{end}}
           </td>

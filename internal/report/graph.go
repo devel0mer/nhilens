@@ -259,7 +259,7 @@ func BuildGraph(run *model.ScanRun) GraphData {
 					Details: []string{
 						"Attached IAM Permissions Boundary",
 						"ARN: " + ident.PermissionsBoundaryARN,
-						"Note: nhilens intersects boundaries for R1 admin-wildcard capping; full action-level intersections are not evaluated.",
+						"Note: nhilens intersects boundaries at the action level across R1, R6, and R7; resource and session policies are not evaluated.",
 					},
 				},
 			})
@@ -319,6 +319,9 @@ func buildIdentityNodeDetails(ident model.Identity, owner string) []string {
 	}
 	if ident.ScoreExplanation != "" {
 		details = append(details, "Why this score: "+ident.ScoreExplanation)
+	}
+	if len(ident.DataGaps) > 0 {
+		details = append(details, "Coverage gaps (partial data): "+strings.Join(ident.DataGaps, ", "))
 	}
 	if len(ident.AIServices) > 0 {
 		details = append(details, "AI/LLM services: "+strings.Join(ident.AIServices, ", "))

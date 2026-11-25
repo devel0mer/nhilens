@@ -11,32 +11,35 @@ import (
 
 type sensitiveActionCheck struct {
 	pattern string
+	probes  []string
 	label   string
 }
 
 var sensitiveWildcardChecks = []sensitiveActionCheck{
-	{pattern: "kms:*", label: "kms:* (unrestricted KMS key management/decryption)"},
-	{pattern: "kms:decrypt", label: "kms:Decrypt on Resource:*"},
-	{pattern: "secretsmanager:*", label: "secretsmanager:* (all Secrets Manager operations)"},
-	{pattern: "secretsmanager:getsecretvalue", label: "secretsmanager:GetSecretValue on Resource:*"},
-	{pattern: "ssm:*", label: "ssm:* (all Systems Manager & Parameter Store operations)"},
-	{pattern: "ssm:getparameter", label: "ssm:GetParameter* on Resource:*"},
-	{pattern: "ssm:getparameters", label: "ssm:GetParameters on Resource:*"},
-	{pattern: "ssm:getparametersbypath", label: "ssm:GetParametersByPath on Resource:*"},
-	{pattern: "bedrock:*", label: "bedrock:* (unrestricted Bedrock model/agent/guardrail control)"},
-	{pattern: "sagemaker:*", label: "sagemaker:* (unrestricted SageMaker training/endpoint/notebook control)"},
+	{pattern: "kms:*", probes: []string{"kms:decrypt", "kms:creategrant", "kms:putkeypolicy"}, label: "kms:* (unrestricted KMS key management/decryption)"},
+	{pattern: "kms:decrypt", probes: []string{"kms:decrypt"}, label: "kms:Decrypt on Resource:*"},
+	{pattern: "secretsmanager:*", probes: []string{"secretsmanager:getsecretvalue", "secretsmanager:putsecretvalue"}, label: "secretsmanager:* (all Secrets Manager operations)"},
+	{pattern: "secretsmanager:getsecretvalue", probes: []string{"secretsmanager:getsecretvalue"}, label: "secretsmanager:GetSecretValue on Resource:*"},
+	{pattern: "ssm:*", probes: []string{"ssm:getparameter", "ssm:putparameter"}, label: "ssm:* (all Systems Manager & Parameter Store operations)"},
+	{pattern: "ssm:getparameter", probes: []string{"ssm:getparameter"}, label: "ssm:GetParameter* on Resource:*"},
+	{pattern: "ssm:getparameters", probes: []string{"ssm:getparameters"}, label: "ssm:GetParameters on Resource:*"},
+	{pattern: "ssm:getparametersbypath", probes: []string{"ssm:getparametersbypath"}, label: "ssm:GetParametersByPath on Resource:*"},
+	{pattern: "bedrock:*", probes: []string{"bedrock:invokemodel", "bedrock:createagent"}, label: "bedrock:* (unrestricted Bedrock model/agent/guardrail control)"},
+	{pattern: "sagemaker:*", probes: []string{"sagemaker:createnotebookinstance", "sagemaker:invokeendpoint"}, label: "sagemaker:* (unrestricted SageMaker training/endpoint/notebook control)"},
 }
 
 // R7SensitiveServiceWildcard flags non-human identities with broad Resource:"*" permissions over
 // high-value secrets/key stores (KMS, Secrets Manager, SSM Parameter Store) or AI control planes
 // (bedrock:*, sagemaker:*). Full Action:"*" policies are handled by R1 to avoid duplicate findings.
+// Action-level explicit Denies, attached Permissions Boundaries, and optional SCPs are intersected
+// so blocked sensitive wildcards do not emit false-positive alerts.
 type R7SensitiveServiceWildcard struct{}
 
 func (R7SensitiveServiceWildcard) ID() string                      { return "R7" }
 func (R7SensitiveServiceWildcard) Name() string                    { return "sensitive-service-wildcard" }
 func (R7SensitiveServiceWildcard) DefaultSeverity() model.Severity { return model.SeverityHigh }
 
-func (r R7SensitiveServiceWildcard) Evaluate(ident *model.Identity, _ Context) *model.Finding {
+func (r R7SensitiveServiceWildcard) Evaluate(ident *model.Identity, rctx Context) *model.Finding {
 	if ident == nil || !IsNonHuman(ident) {
 		return nil
 	}
@@ -79,10 +82,15 @@ func (r R7SensitiveServiceWildcard) Evaluate(ident *model.Identity, _ Context) *
 			}
 
 			condKeys := collectConditionKeys(stmt.Conditions)
-			conditioned := len(condKeys) > 0
 			stmtTag := formatStmtTag(label, stmt.SID)
 
-			matchedLabels := make(map[string]struct{})
+			uncondLabels := make(map[string]struct{})
+			condLabels := make(map[string]struct{})
+			allCondKeys := make(map[string]struct{})
+			for _, k := range condKeys {
+				allCondKeys[k] = struct{}{}
+			}
+
 			// Check service-level wildcards first so kms:* doesn't also emit kms:Decrypt redundantly.
 			hasKMSAll := matchesActionPattern(stmt.Actions, "kms:*")
 			hasSMAll := matchesActionPattern(stmt.Actions, "secretsmanager:*")
@@ -98,25 +106,33 @@ func (r R7SensitiveServiceWildcard) Evaluate(ident *model.Identity, _ Context) *
 				if hasSSMAll && strings.HasPrefix(chk.pattern, "ssm:getparameter") {
 					continue
 				}
-				if matchesActionPattern(stmt.Actions, chk.pattern) {
-					matchedLabels[chk.label] = struct{}{}
+				if !matchesActionPattern(stmt.Actions, chk.pattern) {
+					continue
+				}
+
+				dec := policy.EvaluateEffectiveAnyAction(ident, rctx.SCPPolicies, chk.probes, "*")
+				if !dec.Allowed {
+					// Effectively blocked by explicit Deny, attached Permissions Boundary, or SCP.
+					continue
+				}
+				if len(condKeys) > 0 || dec.Conditioned {
+					condLabels[chk.label] = struct{}{}
+					for _, k := range dec.ConditionKeys {
+						allCondKeys[k] = struct{}{}
+					}
+				} else {
+					uncondLabels[chk.label] = struct{}{}
 				}
 			}
 
-			if len(matchedLabels) == 0 {
-				continue
-			}
-
-			items := make([]string, 0, len(matchedLabels))
-			for l := range matchedLabels {
-				items = append(items, l)
-			}
-			sort.Strings(items)
-
-			if conditioned {
-				addEvidence(model.SeverityMedium, fmt.Sprintf("%s grants broad sensitive-service access [%s] (conditioned on %s; severity reduced from high to medium)", stmtTag, strings.Join(items, ", "), strings.Join(condKeys, ", ")))
-			} else {
+			if len(uncondLabels) > 0 {
+				items := sortedStringSet(uncondLabels)
 				addEvidence(model.SeverityHigh, fmt.Sprintf("%s grants unconditioned broad access to [%s]", stmtTag, strings.Join(items, ", ")))
+			}
+			if len(condLabels) > 0 {
+				items := sortedStringSet(condLabels)
+				cKeys := sortedStringSet(allCondKeys)
+				addEvidence(model.SeverityMedium, fmt.Sprintf("%s grants broad sensitive-service access [%s] (conditioned on %s; severity reduced from high to medium)", stmtTag, strings.Join(items, ", "), strings.Join(cKeys, ", ")))
 			}
 		}
 	}
@@ -130,8 +146,17 @@ func (r R7SensitiveServiceWildcard) Evaluate(ident *model.Identity, _ Context) *
 		RuleName:    r.Name(),
 		Severity:    highestSev,
 		Title:       "Non-human identity has broad wildcard access to secrets, KMS, or AI control plane",
-		Explanation: "This non-human identity can read or manage secrets/keys (KMS, Secrets Manager, SSM Parameter Store) or full AI control planes (bedrock:*, sagemaker:*) across Resource \"*\". Compromised AI agents with unrestricted secret or AI-service wildcards can exfiltrate credentials or invoke/reconfigure arbitrary foundation models.",
+		Explanation: "This non-human identity effectively retains read or administrative access to secrets/keys (KMS, Secrets Manager, SSM Parameter Store) or full AI control planes (bedrock:*, sagemaker:*) across Resource \"*\" after intersecting explicit Denies, permissions boundaries, and provided SCPs.",
 		Remediation: "Scope KMS, Secrets Manager, and SSM Parameter Store policies to specific secret/key/parameter ARNs or path prefixes, and replace bedrock:*/sagemaker:* with explicit runtime invocation actions scoped to approved model/endpoint ARNs. Run `nhilens explain R7` for examples.",
 		Evidence:    evidence,
 	}
+}
+
+func sortedStringSet(m map[string]struct{}) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

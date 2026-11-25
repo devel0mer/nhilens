@@ -20,15 +20,16 @@ import (
 
 // Options configures IAM inventory collection behavior.
 type Options struct {
-	OwnerTagKeys            []string
-	MaxConcurrency          int
-	Retry                   RetryPolicy
-	PollInitialInterval     time.Duration
-	PollMaxInterval         time.Duration
-	LastAccessedTimeout     time.Duration
-	SkipServiceLastAccessed bool
-	Sleep                   func(ctx context.Context, d time.Duration) error
-	Now                     func() time.Time
+	OwnerTagKeys              []string
+	MaxConcurrency            int
+	Retry                     RetryPolicy
+	PollInitialInterval       time.Duration
+	PollMaxInterval           time.Duration
+	LastAccessedTimeout       time.Duration
+	SkipServiceLastAccessed   bool
+	IncludeServiceLinkedRoles bool
+	Sleep                     func(ctx context.Context, d time.Duration) error
+	Now                       func() time.Time
 }
 
 func (o Options) normalize() Options {
@@ -113,9 +114,16 @@ func (c *IAMCollector) Collect(ctx context.Context, profile, region, sinceWindow
 	}
 
 	var (
-		mu       sync.Mutex
+		mu        sync.Mutex
 		keyIdents []model.Identity
-		warnings []string
+		warnings  []string
+		cov       = model.ScanCoverage{
+			AccountID:            accountID,
+			Region:               region,
+			SinceWindow:          sinceWindow,
+			CloudTrailStatus:     model.CloudTrailStatusUnknown,
+			AccessAdvisorSkipped: c.opts.SkipServiceLastAccessed,
+		}
 	)
 
 	addWarning := func(msg string) {
@@ -160,15 +168,33 @@ func (c *IAMCollector) Collect(ctx context.Context, profile, region, sinceWindow
 
 			if t.isUser {
 				hasLogin, loginErr := c.checkLoginProfile(ctx, ident.Name)
+				mu.Lock()
+				cov.LoginProfileChecked++
 				if loginErr != nil {
+					cov.LoginProfileFailed++
+				}
+				mu.Unlock()
+				if loginErr != nil {
+					ident.AddDataGap("login_profile_unknown")
 					addWarning(fmt.Sprintf("user %s: GetLoginProfile failed: %v", ident.Name, loginErr))
 				} else {
 					ident.HasConsoleLogin = &hasLogin
 				}
 
-				keys, keyIDs, activeKeyIDs, latestKeyUse, keyWarnings := c.collectUserAccessKeys(ctx, ident)
+				keys, keyIDs, activeKeyIDs, latestKeyUse, keyListFailed, keyLastUsedFailed, keyWarnings := c.collectUserAccessKeys(ctx, ident)
 				for _, w := range keyWarnings {
 					addWarning(w)
+				}
+				if keyListFailed {
+					ident.AddDataGap("access_key_list_failed")
+					mu.Lock()
+					cov.AccessKeyListFailed++
+					mu.Unlock()
+				}
+				if keyLastUsedFailed > 0 {
+					mu.Lock()
+					cov.AccessKeyLastUsedFailed += keyLastUsedFailed
+					mu.Unlock()
 				}
 				ident.AccessKeyIDs = keyIDs
 				ident.ActiveAccessKeyIDs = activeKeyIDs
@@ -183,13 +209,40 @@ func (c *IAMCollector) Collect(ctx context.Context, profile, region, sinceWindow
 				}
 			}
 
-			if !c.opts.SkipServiceLastAccessed {
+			switch {
+			case c.opts.SkipServiceLastAccessed:
+				if !ident.IsServiceLinkedRole || c.opts.IncludeServiceLinkedRoles {
+					if len(ident.Policies) > 0 {
+						ident.AddDataGap("access_advisor_skipped")
+					}
+				}
+			case ident.IsServiceLinkedRole && !c.opts.IncludeServiceLinkedRoles:
+				// Avoid burning async Access Advisor jobs on AWS service-linked roles excluded from findings.
+				mu.Lock()
+				cov.AccessAdvisorSkippedSLR++
+				mu.Unlock()
+			case len(ident.Policies) == 0:
+				// Identities with zero attached/inline/group policies have no services to be unused in R2.
+				mu.Lock()
+				cov.AccessAdvisorSkippedNoPolicy++
+				mu.Unlock()
+			default:
+				mu.Lock()
+				cov.AccessAdvisorAttempted++
+				mu.Unlock()
 				services, slaErr := c.collectServiceLastAccessed(ctx, ident.ARN)
 				if slaErr != nil {
 					ident.ServiceLastAccessedError = slaErr.Error()
+					ident.AddDataGap("access_advisor_failed")
+					mu.Lock()
+					cov.AccessAdvisorFailed++
+					mu.Unlock()
 					addWarning(fmt.Sprintf("%s %s: service last-accessed incomplete: %v", ident.Type, ident.Name, slaErr))
 				} else {
 					ident.ServicesLastAccessed = services
+					mu.Lock()
+					cov.AccessAdvisorSucceeded++
+					mu.Unlock()
 				}
 			}
 		}(t)
@@ -223,6 +276,7 @@ func (c *IAMCollector) Collect(ctx context.Context, profile, region, sinceWindow
 		CompletedAt:      completedAt,
 		SinceWindow:      sinceWindow,
 		CloudTrailStatus: model.CloudTrailStatusUnknown,
+		Coverage:         &cov,
 		Warnings:         warnings,
 		Identities:       identities,
 	}, nil
@@ -278,11 +332,12 @@ func (c *IAMCollector) checkLoginProfile(ctx context.Context, userName string) (
 	return false, err
 }
 
-func (c *IAMCollector) collectUserAccessKeys(ctx context.Context, user *model.Identity) ([]model.Identity, []string, []string, *time.Time, []string) {
+func (c *IAMCollector) collectUserAccessKeys(ctx context.Context, user *model.Identity) ([]model.Identity, []string, []string, *time.Time, bool, int, []string) {
 	var (
-		keyMeta  []iamtypes.AccessKeyMetadata
-		warnings []string
-		marker   *string
+		keyMeta        []iamtypes.AccessKeyMetadata
+		warnings       []string
+		marker         *string
+		lastUsedFailed int
 	)
 
 	for {
@@ -294,7 +349,7 @@ func (c *IAMCollector) collectUserAccessKeys(ctx context.Context, user *model.Id
 		})
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("user %s: ListAccessKeys failed: %v", user.Name, err))
-			return nil, nil, nil, nil, warnings
+			return nil, nil, nil, nil, true, 0, warnings
 		}
 
 		keyMeta = append(keyMeta, out.AccessKeyMetadata...)
@@ -323,6 +378,7 @@ func (c *IAMCollector) collectUserAccessKeys(ctx context.Context, user *model.Id
 			lastUsedDate    *time.Time
 			lastUsedService string
 			lastUsedRegion  string
+			keyLastUsedErr  bool
 		)
 
 		lastOut, err := DoWithRetry(ctx, c.opts.Retry, func(ctx context.Context) (*iam.GetAccessKeyLastUsedOutput, error) {
@@ -331,6 +387,8 @@ func (c *IAMCollector) collectUserAccessKeys(ctx context.Context, user *model.Id
 			})
 		})
 		if err != nil {
+			keyLastUsedErr = true
+			lastUsedFailed++
 			warnings = append(warnings, fmt.Sprintf("key %s (user %s): GetAccessKeyLastUsed failed: %v", keyID, user.Name, err))
 		} else if lastOut.AccessKeyLastUsed != nil {
 			if lastOut.AccessKeyLastUsed.LastUsedDate != nil {
@@ -357,7 +415,7 @@ func (c *IAMCollector) collectUserAccessKeys(ctx context.Context, user *model.Id
 			ownerCopy = &v
 		}
 
-		keys = append(keys, model.Identity{
+		keyIdent := model.Identity{
 			ID:       user.ARN + "/access-key/" + keyID,
 			ARN:      user.ARN,
 			Type:     model.TypeKey,
@@ -377,12 +435,16 @@ func (c *IAMCollector) collectUserAccessKeys(ctx context.Context, user *model.Id
 			},
 			CloudTrailStatus: model.CloudTrailStatusUnknown,
 			AgentLikelihood:  model.LikelihoodNone,
-		})
+		}
+		if keyLastUsedErr {
+			keyIdent.AddDataGap("access_key_last_used_failed")
+		}
+		keys = append(keys, keyIdent)
 	}
 
 	sort.Strings(keyIDs)
 	sort.Strings(activeKeyIDs)
-	return keys, keyIDs, activeKeyIDs, latestUse, warnings
+	return keys, keyIDs, activeKeyIDs, latestUse, false, lastUsedFailed, warnings
 }
 
 func (c *IAMCollector) collectServiceLastAccessed(ctx context.Context, arn string) ([]model.ServiceLastAccessed, error) {

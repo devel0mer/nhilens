@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"sort"
+	"strings"
+	"time"
+)
 
 // IdentityType distinguishes the three normalized non-human identity kinds.
 type IdentityType string
@@ -57,21 +61,57 @@ const (
 	CloudTrailStatusDisabled = "disabled"
 )
 
+// CoverageStatus reports whether all expected enrichment checks succeeded for a scan or identity.
+const (
+	CoverageStatusComplete = "complete"
+	CoverageStatusPartial  = "partial"
+)
+
+// ScanCoverage summarizes data completeness, scope, skipped checks, and collection errors
+// so partial scans are never mistaken for "zero findings".
+type ScanCoverage struct {
+	Status                       string   `json:"status"` // complete | partial
+	AccountID                    string   `json:"account_id"`
+	Region                       string   `json:"region"`
+	SinceWindow                  string   `json:"since_window"`
+	CloudTrailStatus             string   `json:"cloudtrail_status"`
+	CloudTrailEventsAnalyzed     int      `json:"cloudtrail_events_analyzed"`
+	CloudTrailEventLimit         int      `json:"cloudtrail_event_limit"`
+	CloudTrailTruncated          bool     `json:"cloudtrail_truncated,omitempty"`
+	LoginProfileChecked          int      `json:"login_profile_checked"`
+	LoginProfileFailed           int      `json:"login_profile_failed"`
+	AccessKeyListFailed          int      `json:"access_key_list_failed"`
+	AccessKeyLastUsedFailed      int      `json:"access_key_last_used_failed"`
+	AccessAdvisorSkipped         bool     `json:"access_advisor_skipped"`
+	AccessAdvisorAttempted       int      `json:"access_advisor_attempted"`
+	AccessAdvisorSucceeded       int      `json:"access_advisor_succeeded"`
+	AccessAdvisorFailed          int      `json:"access_advisor_failed"`
+	AccessAdvisorSkippedSLR      int      `json:"access_advisor_skipped_slr,omitempty"`
+	AccessAdvisorSkippedNoPolicy int      `json:"access_advisor_skipped_no_policy,omitempty"`
+	ServiceLinkedRolesExcluded   int      `json:"service_linked_roles_excluded"`
+	PolicyParseErrors            int      `json:"policy_parse_errors"`
+	SCPPoliciesLoaded            int      `json:"scp_policies_loaded"`
+	PartialIdentities            int      `json:"partial_identities"`
+	SkippedChecks                []string `json:"skipped_checks,omitempty"`
+	CollectionErrorCount         int      `json:"collection_error_count"`
+}
+
 // ScanRun represents a single read-only audit run against an AWS account.
 type ScanRun struct {
-	ID                   string     `json:"id"`
-	AccountID            string     `json:"account_id"`
-	CallerARN            string     `json:"caller_arn"`
-	Region               string     `json:"region"`
-	Profile              string     `json:"profile,omitempty"`
-	StartedAt            time.Time  `json:"started_at"`
-	CompletedAt          time.Time  `json:"completed_at"`
-	SinceWindow          string     `json:"since_window"`
-	CloudTrailStatus       string     `json:"cloudtrail_status"`
-	CloudTrailEventCount   int        `json:"cloudtrail_event_count"`
-	SuppressedFindingCount int        `json:"suppressed_finding_count,omitempty"`
-	Warnings               []string   `json:"warnings,omitempty"`
-	Identities             []Identity `json:"identities"`
+	ID                     string        `json:"id"`
+	AccountID              string        `json:"account_id"`
+	CallerARN              string        `json:"caller_arn"`
+	Region                 string        `json:"region"`
+	Profile                string        `json:"profile,omitempty"`
+	StartedAt              time.Time     `json:"started_at"`
+	CompletedAt            time.Time     `json:"completed_at"`
+	SinceWindow            string        `json:"since_window"`
+	CloudTrailStatus       string        `json:"cloudtrail_status"`
+	CloudTrailEventCount   int           `json:"cloudtrail_event_count"`
+	SuppressedFindingCount int           `json:"suppressed_finding_count,omitempty"`
+	Coverage               *ScanCoverage `json:"coverage,omitempty"`
+	Warnings               []string      `json:"warnings,omitempty"`
+	Identities             []Identity    `json:"identities"`
 }
 
 // Identity is the normalized audit record for a single IAM role, IAM user, or access key.
@@ -100,6 +140,8 @@ type Identity struct {
 	EffectiveActions         AllowedActionsSummary `json:"effective_actions"`
 	ServicesLastAccessed     []ServiceLastAccessed `json:"services_last_accessed,omitempty"`
 	ServiceLastAccessedError string                `json:"service_last_accessed_error,omitempty"`
+	CoverageStatus           string                `json:"coverage_status,omitempty"` // complete | partial
+	DataGaps                 []string              `json:"data_gaps,omitempty"`
 	SourceIPs                []string              `json:"source_ips,omitempty"`
 	CloudTrailStatus         string                `json:"cloudtrail_status"`
 	CloudTrailEventCount     int                   `json:"cloudtrail_event_count,omitempty"`
@@ -224,4 +266,24 @@ type ActivityCount struct {
 type ScoreContribution struct {
 	Source string  `json:"source"`
 	Points float64 `json:"points"`
+}
+
+// AddDataGap records a unique, sorted data-collection gap on an identity and marks it partial.
+func (id *Identity) AddDataGap(gap string) {
+	if id == nil {
+		return
+	}
+	g := strings.TrimSpace(gap)
+	if g == "" {
+		return
+	}
+	for _, existing := range id.DataGaps {
+		if existing == g {
+			id.CoverageStatus = CoverageStatusPartial
+			return
+		}
+	}
+	id.DataGaps = append(id.DataGaps, g)
+	sort.Strings(id.DataGaps)
+	id.CoverageStatus = CoverageStatusPartial
 }

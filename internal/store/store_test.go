@@ -53,7 +53,18 @@ func TestStoreSaveAndLoadRoundTrip(t *testing.T) {
 		CompletedAt:      t1.Add(3 * time.Second),
 		SinceWindow:      "90d",
 		CloudTrailStatus: model.CloudTrailStatusUnknown,
-		Warnings:         []string{"partial access advisor"},
+		Coverage: &model.ScanCoverage{
+			Status:               model.CoverageStatusPartial,
+			AccountID:            "123456789012",
+			Region:               "us-east-1",
+			SinceWindow:          "90d",
+			CloudTrailStatus:     model.CloudTrailStatusUnknown,
+			LoginProfileChecked:  1,
+			LoginProfileFailed:   1,
+			PartialIdentities:    1,
+			CollectionErrorCount: 1,
+		},
+		Warnings: []string{"partial access advisor"},
 		Identities: []model.Identity{
 			{
 				ID:               "arn:aws:iam::123456789012:role/agent-a",
@@ -132,6 +143,9 @@ func TestStoreSaveAndLoadRoundTrip(t *testing.T) {
 	}
 	if len(loaded1.Warnings) != 1 || loaded1.Warnings[0] != "partial access advisor" {
 		t.Errorf("warnings did not round-trip: %v", loaded1.Warnings)
+	}
+	if loaded1.Coverage == nil || loaded1.Coverage.Status != model.CoverageStatusPartial || loaded1.Coverage.LoginProfileFailed != 1 {
+		t.Errorf("coverage did not round-trip cleanly: %+v", loaded1.Coverage)
 	}
 	// Identities are ordered by risk_score DESC.
 	if loaded1.Identities[0].Name != "agent-a" || loaded1.Identities[0].Owner == nil || *loaded1.Identities[0].Owner != "ai-team" {

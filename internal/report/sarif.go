@@ -26,8 +26,20 @@ type sarifLog struct {
 }
 
 type sarifRun struct {
-	Tool    sarifTool     `json:"tool"`
-	Results []sarifResult `json:"results"`
+	Tool        sarifTool         `json:"tool"`
+	Invocations []sarifInvocation `json:"invocations,omitempty"`
+	Results     []sarifResult     `json:"results"`
+}
+
+type sarifInvocation struct {
+	ExecutionSuccessful        bool                `json:"executionSuccessful"`
+	ToolExecutionNotifications []sarifNotification `json:"toolExecutionNotifications,omitempty"`
+	Properties                 map[string]any      `json:"properties,omitempty"`
+}
+
+type sarifNotification struct {
+	Level   string       `json:"level"`
+	Message sarifMessage `json:"message"`
 }
 
 type sarifTool struct {
@@ -142,6 +154,14 @@ func WriteSARIF(w io.Writer, run *model.ScanRun) error {
 		}
 	}
 
+	notifications := make([]sarifNotification, 0, len(run.Warnings))
+	for _, warn := range run.Warnings {
+		notifications = append(notifications, sarifNotification{
+			Level:   "warning",
+			Message: sarifMessage{Text: warn},
+		})
+	}
+
 	log := sarifLog{
 		Schema:  sarifSchema,
 		Version: sarifVersion,
@@ -153,6 +173,19 @@ func WriteSARIF(w io.Writer, run *model.ScanRun) error {
 						Version:        version.Version,
 						InformationURI: repoInfoURI,
 						Rules:          rules,
+					},
+				},
+				Invocations: []sarifInvocation{
+					{
+						ExecutionSuccessful:        true,
+						ToolExecutionNotifications: notifications,
+						Properties: map[string]any{
+							"scan_id":       run.ID,
+							"account_id":    run.AccountID,
+							"region":        run.Region,
+							"since_window":  run.SinceWindow,
+							"scan_coverage": data.Coverage,
+						},
 					},
 				},
 				Results: results,
@@ -208,6 +241,9 @@ func buildSARIFResult(accountID string, ident model.Identity, f model.Finding, s
 			"identity_type":    string(ident.Type),
 			"owner":            owner,
 			"agent_likelihood": string(ident.AgentLikelihood),
+			"workload_kind":    ident.WorkloadKind,
+			"coverage_status":  ident.CoverageStatus,
+			"data_gaps":        ident.DataGaps,
 			"ai_services":      ident.AIServices,
 			"risk_score":       ident.RiskScore,
 			"raw_risk_points":  ident.RawRiskPoints,

@@ -7,11 +7,12 @@ on:
 
 permissions:
   contents: write
-  id-token: write # Required for keyless Cosign (Sigstore) artifact signing
+  id-token: write      # Required for keyless Cosign (Sigstore) signing and SLSA provenance
+  attestations: write  # Required for GitHub SLSA Build Provenance attestations
 
 jobs:
   release:
-    name: Build, Sign & Publish Release
+    name: Build, Sign, SBOM & Publish Release
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: "0"
@@ -35,6 +36,9 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
 
+      - name: Install Syft (CycloneDX SBOM generator)
+        uses: anchore/sbom-action/download-syft@v0
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -44,3 +48,53 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      - name: Attest SLSA build provenance for release artifacts
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/nhilens_*.tar.gz
+            dist/nhilens_*.zip
+            dist/checksums.txt
+
+  verify-release:
+    name: Verify Published Release (Cosign + SHA-256 + SBOM + Smoke Test)
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Download published release artifacts and verify end-to-end
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir -p /tmp/verify-release
+          cd /tmp/verify-release
+
+          gh release download "${TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern "checksums.txt" \
+            --pattern "checksums.txt.sigstore.json" \
+            --pattern "nhilens_*_linux_amd64.tar.gz*"
+
+          # Run the exact user-facing Cosign verification command from README.md
+          cosign verify-blob \
+            --bundle checksums.txt.sigstore.json \
+            --certificate-identity-regexp '^https://github\.com/devel0mer/nhilens/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            checksums.txt
+
+          # Verify archive and SBOM SHA-256 checksums
+          sha256sum -c checksums.txt --ignore-missing
+
+          # Verify CycloneDX SBOM is valid JSON
+          python3 -m json.tool nhilens_*_linux_amd64.tar.gz.sbom.json > /dev/null
+
+          # Extract and smoke-test the published static binary
+          tar -xzf nhilens_*_linux_amd64.tar.gz
+          ./nhilens version
+          ./nhilens explain R6 | head -n 10

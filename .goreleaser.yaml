@@ -52,6 +52,12 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+# Generate CycloneDX JSON SBOMs alongside every release archive (requires syft in release CI).
+sboms:
+  - artifacts: archive
+    documents:
+      - "${artifact}.sbom.json"
+
 # Keyless Cosign signing of checksums.txt via GitHub Actions OIDC (Sigstore Fulcio/Rekor).
 signs:
   - cmd: cosign

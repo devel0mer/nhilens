@@ -32,7 +32,8 @@ type Config struct {
 
 // AWSConfig configures default AWS SDK behavior.
 type AWSConfig struct {
-	Region string `yaml:"region"`
+	Region         string `yaml:"region"`
+	MaxConcurrency int    `yaml:"max_concurrency"`
 }
 
 // AgentDetectionConfig configures heuristic signals used to estimate AI agent likelihood.
@@ -80,7 +81,8 @@ type OutputConfig struct {
 func Default() *Config {
 	cfg := &Config{
 		AWS: AWSConfig{
-			Region: "us-east-1",
+			Region:         "us-east-1",
+			MaxConcurrency: 5,
 		},
 		AgentDetection: AgentDetectionConfig{
 			AgentTagKeys: []string{
@@ -286,6 +288,12 @@ func Load(path string) (*Config, error) {
 func (c *Config) Validate() error {
 	if c == nil {
 		return errors.New("config is nil")
+	}
+	if c.AWS.MaxConcurrency < 0 || c.AWS.MaxConcurrency > 32 {
+		return fmt.Errorf("aws.max_concurrency must be between 1 and 32, got %d", c.AWS.MaxConcurrency)
+	}
+	if c.AWS.MaxConcurrency == 0 {
+		c.AWS.MaxConcurrency = 5
 	}
 	if c.Rules.StaleDays <= 0 {
 		return fmt.Errorf("rules.stale_days must be > 0, got %d", c.Rules.StaleDays)
