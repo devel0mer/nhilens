@@ -1,0 +1,89 @@
+version: 2
+
+project_name: nhilens
+
+before:
+  hooks:
+    - go mod verify
+    - go vet ./...
+    - go test -count=1 ./...
+
+builds:
+  - id: nhilens
+    main: ./cmd/nhilens
+    binary: nhilens
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/devel0mer/nhilens/internal/version.Version={{.Version}}
+      - -X github.com/devel0mer/nhilens/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/devel0mer/nhilens/internal/version.Date={{.Date}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: nhilens
+    ids:
+      - nhilens
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - README.md
+      - docs/iam-policy.json
+      - docs/nhilens.example.yaml
+      - docs/nhilens-ignore.example.yaml
+      - docs/rules.md
+
+checksum:
+  name_template: "checksums.txt"
+
+# Keyless Cosign signing of checksums.txt via GitHub Actions OIDC (Sigstore Fulcio/Rekor).
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+
+# Optional Homebrew Tap (uncomment once github.com/devel0mer/homebrew-tap is created
+# and HOMEBREW_TAP_GITHUB_TOKEN is configured in GitHub Secrets):
+# brews:
+#   - name: nhilens
+#     repository:
+#       owner: devel0mer
+#       name: homebrew-tap
+#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+#     homepage: https://github.com/devel0mer/nhilens
+#     description: "Read-only AWS non-human identity & AI agent auditor"
+#     license: Apache-2.0
+#     test: |
+#       system "#{bin}/nhilens", "version"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

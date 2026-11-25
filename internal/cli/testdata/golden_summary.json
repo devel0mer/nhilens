@@ -1,0 +1,69 @@
+[
+  {
+    "name": "bedrock-privesc-agent",
+    "type": "role",
+    "agent_likelihood": "likely",
+    "agent_confidence": 100,
+    "workload_kind": "ai_agent",
+    "agent_profile": "bedrock-agent",
+    "risk_score": 8.5,
+    "raw_risk_points": 12.5,
+    "findings": [
+      "R3:medium",
+      "R5:medium",
+      "R6:critical",
+      "R7:high"
+    ]
+  },
+  {
+    "name": "AKIA1111111111111111",
+    "type": "key",
+    "agent_likelihood": "possible",
+    "agent_confidence": 45,
+    "workload_kind": "automation",
+    "agent_profile": "programmatic-key-bot",
+    "risk_score": 2.6,
+    "raw_risk_points": 2,
+    "findings": [
+      "R8:medium"
+    ]
+  },
+  {
+    "name": "AKIA2222222222222222",
+    "type": "key",
+    "agent_likelihood": "possible",
+    "agent_confidence": 45,
+    "workload_kind": "automation",
+    "agent_profile": "programmatic-key-bot",
+    "risk_score": 2.6,
+    "raw_risk_points": 2,
+    "findings": [
+      "R8:medium"
+    ]
+  },
+  {
+    "name": "bounded-admin-worker",
+    "type": "role",
+    "agent_likelihood": "possible",
+    "agent_confidence": 45,
+    "workload_kind": "automation",
+    "risk_score": 2.6,
+    "raw_risk_points": 2,
+    "findings": [
+      "R1:medium"
+    ]
+  },
+  {
+    "name": "ci-dual-key-bot",
+    "type": "user",
+    "agent_likelihood": "possible",
+    "agent_confidence": 45,
+    "workload_kind": "automation",
+    "agent_profile": "programmatic-key-bot",
+    "risk_score": 2.6,
+    "raw_risk_points": 2,
+    "findings": [
+      "R8:medium"
+    ]
+  }
+]

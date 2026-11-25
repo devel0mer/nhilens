@@ -1,0 +1,36 @@
+# Binaries and build artifacts
+/nhilens
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+coverage.out
+
+# Local scan outputs and reports
+nhilens-out/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+report.html
+
+# Local config overrides (never commit real account configs)
+nhilens.yaml
+nhilens.local.yaml
+
+# Terraform sandbox fixture state
+test/**/.terraform/
+test/**/*.tfstate
+test/**/*.tfstate.*
+test/**/.terraform.lock.hcl
+test/**/crash.log
+
+# OS / Editor
+.DS_Store
+__MACOSX/
+.idea/
+.vscode/
+*.swp

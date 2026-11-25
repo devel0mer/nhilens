@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nhilens Audit Report — Account {{.Report.Summary.AccountID}}</title>
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --muted: #59636e;
+    --header-bg: #0f172a;
+    --header-text: #f8fafc;
+    --crit: #b91c1c;
+    --crit-bg: #fef2f2;
+    --high: #c2410c;
+    --high-bg: #fff7ed;
+    --med: #a16207;
+    --med-bg: #fefce8;
+    --low: #1d4ed8;
+    --low-bg: #eff6ff;
+    --clean: #15803d;
+    --clean-bg: #f0fdf4;
+    --accent: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  header {
+    background: var(--header-bg);
+    color: var(--header-text);
+    padding: 24px 32px;
+    border-bottom: 3px solid var(--accent);
+  }
+  header h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.02em; }
+  header .subtitle { color: #94a3b8; font-size: 14px; }
+  main { max-width: 1360px; margin: 0 auto; padding: 24px 28px 56px; }
+  .banner-warn {
+    background: #fffbeb;
+    border: 1px solid #f59e0b;
+    border-left: 5px solid #d97706;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 24px;
+    font-size: 13.5px;
+    color: #78350f;
+  }
+  h2 {
+    font-size: 19px;
+    margin: 28px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .card .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  .card .value { font-size: 26px; font-weight: 700; margin-top: 4px; }
+  .card .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 18px;
+    overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eaeef2; vertical-align: top; }
+  th { background: #f8fafc; font-weight: 600; font-size: 12px; text-transform: uppercase; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .sev-critical { color: var(--crit); background: var(--crit-bg); border: 1px solid #fecaca; }
+  .sev-high { color: var(--high); background: var(--high-bg); border: 1px solid #fed7aa; }
+  .sev-medium { color: var(--med); background: var(--med-bg); border: 1px solid #fef08a; }
+  .sev-low { color: var(--low); background: var(--low-bg); border: 1px solid #bfdbfe; }
+  .sev-clean { color: var(--clean); background: var(--clean-bg); border: 1px solid #bbf7d0; }
+  .sev-info { color: var(--muted); background: #f1f5f9; border: 1px solid var(--border); }
+  .agent-likely { color: #6d28d9; background: #f5f3ff; border: 1px solid #ddd6fe; }
+  .agent-possible { color: #0369a1; background: #f0f9ff; border: 1px solid #bae6fd; }
+  .agent-none { color: var(--muted); background: #f8fafc; border: 1px solid var(--border); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12.5px; }
+  .muted { color: var(--muted); font-size: 12.5px; }
+  ul.compact { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; }
+  ul.compact li { margin-bottom: 2px; }
+  .rule-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .rule-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-bottom: 1px solid var(--border);
+  }
+  .rule-body { padding: 14px 16px; }
+  .remediation {
+    background: #f0fdf4;
+    border-left: 4px solid #16a34a;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    margin: 10px 0 14px;
+  }
+  .graph-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+  .graph-toolbar input[type="search"], .graph-toolbar select, .graph-toolbar button {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .graph-toolbar button { cursor: pointer; font-weight: 500; }
+  .graph-toolbar button:hover { background: #f1f5f9; }
+  .graph-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 14px;
+  }
+  @media (max-width: 960px) {
+    .graph-wrap { grid-template-columns: 1fr; }
+  }
+  #cy {
+    height: 540px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fcfcfd;
+  }
+  .inspector {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    max-height: 540px;
+    overflow-y: auto;
+    font-size: 13px;
+  }
+  .inspector h3 { margin: 0 0 8px; font-size: 14.5px; }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid rgba(0,0,0,0.2); }
+  .limits-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .limit-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .limit-item h3 { margin: 0 0 6px; font-size: 14.5px; }
+  .limit-item p { margin: 0; font-size: 13px; color: var(--muted); }
+  footer {
+    margin-top: 36px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>nhilens — AWS Non-Human Identity &amp; AI Agent Audit Report</h1>
+  <div class="subtitle">
+    Account <span class="mono">{{.Report.Summary.AccountID}}</span> &middot;
+    Region <span class="mono">{{.Report.Summary.Region}}</span> &middot;
+    Scan <span class="mono">{{.Report.Summary.ScanID}}</span> &middot;
+    Scanned {{fmtTime .Report.Summary.StartedAt}}
+  </div>
+</header>
+
+<main>
+  <div class="banner-warn">
+    <strong>Review before sharing:</strong> This static report contains AWS account IDs, IAM ARNs, role/user names, tag values, policy metadata, and best-effort CloudTrail source IPs. Treat it as a sensitive security artifact and review or redact before sharing externally. All assets are embedded locally (no external CDN requests).
+  </div>
+
+  <h2>Summary</h2>
+  <div class="cards">
+    <div class="card">
+      <div class="label">Total Identities</div>
+      <div class="value">{{.Report.Summary.TotalIdentities}}</div>
+      <div class="sub">{{.Report.Summary.Roles}} roles &middot; {{.Report.Summary.Users}} users &middot; {{.Report.Summary.Keys}} keys ({{.Report.Summary.ServiceLinkedRoles}} service-linked)</div>
+    </div>
+    <div class="card">
+      <div class="label">Heuristic AI / Automation</div>
+      <div class="value">{{.Report.Summary.AgentLikely}} <span style="font-size:14px;font-weight:500;">likely</span></div>
+      <div class="sub">{{.Report.Summary.AgentPossible}} possible (heuristic signals only)</div>
+    </div>
+    <div class="card">
+      <div class="label">Total Findings</div>
+      <div class="value">{{.Report.Summary.TotalFindings}}</div>
+      <div class="sub">{{.Report.Summary.CriticalFindings}} critical &middot; {{.Report.Summary.HighFindings}} high &middot; {{.Report.Summary.MediumFindings}} medium &middot; {{.Report.Summary.LowFindings}} low</div>
+    </div>
+    <div class="card">
+      <div class="label">Unowned Non-Human</div>
+      <div class="value">{{.Report.Summary.UnownedNonHuman}}</div>
+      <div class="sub">Roles/users without configured owner tag</div>
+    </div>
+    <div class="card">
+      <div class="label">CloudTrail Attribution</div>
+      <div class="value" style="font-size:20px;text-transform:uppercase;">{{.Report.Summary.CloudTrailStatus}}</div>
+      <div class="sub">{{.Report.Summary.CloudTrailEventCount}} management events ({{.Report.Summary.SinceWindow}} window)</div>
+    </div>
+  </div>
+
+  {{if .Report.Warnings}}
+  <div class="panel">
+    <strong>Collection Warnings ({{len .Report.Warnings}})</strong>
+    <ul class="compact">
+      {{range .Report.Warnings}}<li>{{.}}</li>{{end}}
+    </ul>
+  </div>
+  {{end}}
+
+  <h2>Top 10 Risky Identities</h2>
+  <div class="panel">
+    {{if .Report.TopRisky}}
+    <div class="graph-toolbar" id="table-filters">
+      <input id="tbl-search" type="search" placeholder="Search name, ARN, owner, rule, AI service...">
+      <label>Type:
+        <select id="tbl-type">
+          <option value="all" selected>All types</option>
+          <option value="role">role</option>
+          <option value="user">user</option>
+          <option value="key">key</option>
+        </select>
+      </label>
+      <label>Agent:
+        <select id="tbl-agent">
+          <option value="all" selected>All likelihoods</option>
+          <option value="likely">likely</option>
+          <option value="possible">possible</option>
+          <option value="none">none</option>
+        </select>
+      </label>
+      <label>Severity:
+        <select id="tbl-sev">
+          <option value="all" selected>All severities</option>
+          <option value="critical">critical</option>
+          <option value="high">high</option>
+          <option value="medium">medium</option>
+          <option value="low">low</option>
+        </select>
+      </label>
+      <button id="tbl-reset" type="button">Reset Filters</button>
+      <span class="muted" id="tbl-count">Showing {{len .Report.TopRisky}} of {{len .Report.TopRisky}}</span>
+    </div>
+    <table id="risky-table">
+      <thead>
+        <tr>
+          <th>Score</th>
+          <th>Identity</th>
+          <th>Agent Likelihood</th>
+          <th>Owner</th>
+          <th>Findings &amp; Why This Score</th>
+          <th>30d Activity &amp; Context</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Report.TopRisky}}
+        <tr class="risky-row" data-type="{{.Type}}" data-agent="{{.AgentLikelihood}}" data-sev="{{maxSev .Findings}}">
+          <td>
+            <span class="badge {{riskClass .RiskScore}}">{{scoreFmt .RiskScore}} / 10</span>
+            {{if gt .RawRiskPoints 0.0}}<div class="muted mono" style="margin-top:4px;">raw {{scoreFmt .RawRiskPoints}}</div>{{end}}
+          </td>
+          <td>
+            <div><strong>{{.Name}}</strong> <span class="badge sev-info">{{.Type}}</span></div>
+            <div class="mono muted">{{.ARN}}</div>
+            {{if .AIServices}}<div class="muted">AI services: <span class="mono">{{join .AIServices ", "}}</span></div>{{end}}
+            {{if .PermissionsBoundaryARN}}<div class="muted">Boundary: <span class="mono">{{shortARN .PermissionsBoundaryARN}}</span></div>{{end}}
+          </td>
+          <td>
+            <span class="badge {{agentClass .AgentLikelihood}}">{{.AgentLikelihood}}{{if gt .AgentConfidence 0}} ({{.AgentConfidence}}%){{end}}</span>
+            {{if .WorkloadKind}}<span class="badge sev-info">{{.WorkloadKind}}</span>{{end}}
+            {{if .AgentProfile}}<span class="badge sev-info">{{.AgentProfile}}</span>{{end}}
+            {{if .AgentReasons}}
+            <ul class="compact">
+              {{range .AgentReasons}}<li>{{.}}</li>{{end}}
+            </ul>
+            {{end}}
+          </td>
+          <td class="mono">{{ownerOrNone .Owner}}</td>
+          <td>
+            {{range .Findings}}
+              <span class="badge {{sevClass .Severity}}">{{.RuleID}} {{.RuleName}}</span>
+            {{end}}
+            {{if .ScoreExplanation}}
+            <div class="muted" style="margin-top:6px;"><strong>Why {{scoreFmt .RiskScore}}/10?</strong> {{.ScoreExplanation}}</div>
+            {{end}}
+            {{if .ScoreContributions}}
+            <ul class="compact muted">
+              {{range .ScoreContributions}}<li>{{.Source}}: +{{scoreFmt .Points}}</li>{{end}}
+            </ul>
+            {{end}}
+          </td>
+          <td class="muted">
+            <div>Last used: {{fmtTimePtr .LastUsed}}</div>
+            {{if .Activity30d}}<div><strong>30d:</strong> <span class="mono">{{fmtActivity30d .Activity30d}}</span></div>{{end}}
+            {{if .ObservedUserAgents}}<div>User-Agents: <span class="mono">{{join .ObservedUserAgents ", "}}</span></div>{{end}}
+            {{if .SourceIPs}}<div>IPs (best-effort): <span class="mono">{{join .SourceIPs ", "}}</span></div>{{end}}
+            {{if and (not .Activity30d) .RecentEventNames}}<div>Actions: <span class="mono">{{join .RecentEventNames ", "}}</span></div>{{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="muted">No risky findings recorded in this scan.</p>
+    {{end}}
+  </div>
+
+  <h2>Findings by Rule</h2>
+  {{range .Report.RuleGroups}}
+  <div class="rule-card">
+    <div class="rule-head">
+      <div>
+        <strong>{{.RuleID}} &mdash; {{.RuleName}}</strong>
+        <span class="badge {{if gt .Count 0}}{{sevClass .HighestSeverity}}{{else}}sev-clean{{end}}">
+          {{if gt .Count 0}}{{.Count}} finding(s) &middot; {{.HighestSeverity}}{{else}}0 findings{{end}}
+        </span>
+      </div>
+    </div>
+    <div class="rule-body">
+      <div class="muted">{{.Explanation}}</div>
+      <div class="remediation"><strong>Remediation hint:</strong> {{.Remediation}}</div>
+      {{if .Items}}
+      <table>
+        <thead>
+          <tr>
+            <th>Identity</th>
+            <th>Severity</th>
+            <th>Agent</th>
+            <th>Score</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Items}}
+          <tr>
+            <td>
+              <strong>{{.IdentityName}}</strong> <span class="badge sev-info">{{.IdentityType}}</span>
+              <div class="mono muted">{{.IdentityARN}}</div>
+            </td>
+            <td><span class="badge {{sevClass .Severity}}">{{.Severity}}</span></td>
+            <td><span class="badge {{agentClass .AgentLikelihood}}">{{.AgentLikelihood}}</span></td>
+            <td><span class="badge {{riskClass .RiskScore}}">{{scoreFmt .RiskScore}}/10</span></td>
+            <td>
+              <ul class="compact">
+                {{range .Evidence}}<li>{{.}}</li>{{end}}
+              </ul>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+
+  <h2>Identity, Trust &amp; Policy Relationship Graph</h2>
+  <div class="panel">
+    <div class="graph-toolbar">
+      <input id="graph-search" type="search" placeholder="Filter node name or ARN...">
+      <label>Layout:
+        <select id="graph-layout">
+          <option value="cose" selected>Force-directed (cose)</option>
+          <option value="breadthfirst">Hierarchy (breadthfirst)</option>
+          <option value="concentric">Concentric (concentric)</option>
+        </select>
+      </label>
+      <label><input type="checkbox" class="kind-toggle" value="trust" checked> Trust</label>
+      <label><input type="checkbox" class="kind-toggle" value="policy" checked> Policies</label>
+      <label><input type="checkbox" class="kind-toggle" value="boundary" checked> Boundaries</label>
+      <button id="graph-reset" type="button">Reset View</button>
+      <span class="muted">
+        {{len .Report.Graph.Nodes}} nodes, {{len .Report.Graph.Edges}} edges
+        {{if gt .Report.Graph.OmittedServiceLinked 0}}({{.Report.Graph.OmittedServiceLinked}} unflagged AWS service-linked roles omitted){{end}}
+      </span>
+    </div>
+    <div class="graph-wrap">
+      <div id="cy" aria-label="Identity relationship graph"></div>
+      <aside class="inspector" id="node-inspector">
+        <h3>Node Inspector</h3>
+        <p class="muted">Click any identity, trust principal, policy, or boundary node to inspect details.</p>
+      </aside>
+    </div>
+    <div class="legend">
+      <span><i class="swatch" style="background:#b91c1c;"></i> Critical / Wildcard</span>
+      <span><i class="swatch" style="background:#ea580c;"></i> High risk</span>
+      <span><i class="swatch" style="background:#ca8a04;"></i> Medium risk</span>
+      <span><i class="swatch" style="background:#2563eb;"></i> Low / Trust</span>
+      <span><i class="swatch" style="background:#16a34a;"></i> Clean identity</span>
+      <span><i class="swatch" style="background:#64748b;"></i> Policy / Boundary</span>
+      <span><i class="swatch" style="background:#ffffff;border:3px solid #6d28d9;"></i> Likely AI agent border</span>
+    </div>
+  </div>
+
+  <h2>Limitations &amp; Methodology</h2>
+  <div class="limits-grid">
+    {{range .Report.Limitations}}
+    <div class="limit-item">
+      <h3>{{.Title}}</h3>
+      <p>{{.Detail}}</p>
+    </div>
+    {{end}}
+  </div>
+
+  <footer>
+    <span>Generated by {{.Report.ToolVersion}} (strictly read-only AWS audit)</span>
+    <span>Generated {{fmtTime .Report.GeneratedAt}}</span>
+  </footer>
+</main>
+
+<script id="nhilens-graph-data" type="application/json">{{.GraphJSON}}</script>
+<script>{{.CytoscapeJS}}</script>
+<script>
+(function () {
+  var rawEl = document.getElementById("nhilens-graph-data");
+  var container = document.getElementById("cy");
+  var inspector = document.getElementById("node-inspector");
+  if (!rawEl || !container || typeof cytoscape === "undefined") {
+    if (container) { container.textContent = "Graph unavailable."; }
+    return;
+  }
+
+  var graph = JSON.parse(rawEl.textContent || "{}");
+  var elements = (graph.nodes || []).concat(graph.edges || []);
+
+  var tierColors = {
+    critical: "#b91c1c",
+    high: "#ea580c",
+    medium: "#ca8a04",
+    low: "#2563eb",
+    clean: "#16a34a",
+    neutral: "#64748b"
+  };
+
+  var kindShapes = {
+    role: "round-rectangle",
+    user: "round-rectangle",
+    key: "hexagon",
+    trust: "ellipse",
+    policy: "rectangle",
+    boundary: "tag"
+  };
+
+  var cy = cytoscape({
+    container: container,
+    elements: elements,
+    style: [
+      {
+        selector: "node",
+        style: {
+          "label": "data(label)",
+          "font-size": 10,
+          "text-valign": "bottom",
+          "text-margin-y": 5,
+          "text-wrap": "wrap",
+          "text-max-width": 120,
+          "color": "#1f2328",
+          "width": 32,
+          "height": 32,
+          "shape": function (ele) { return kindShapes[ele.data("kind")] || "ellipse"; },
+          "background-color": function (ele) { return tierColors[ele.data("risk_tier")] || "#64748b"; },
+          "border-width": function (ele) { return ele.data("agent_likelihood") === "likely" ? 4 : 1.5; },
+          "border-color": function (ele) { return ele.data("agent_likelihood") === "likely" ? "#6d28d9" : "#ffffff"; }
+        }
+      },
+      {
+        selector: "edge",
+        style: {
+          "width": 1.6,
+          "line-color": function (ele) { return ele.data("risky") ? "#dc2626" : "#94a3b8"; },
+          "target-arrow-color": function (ele) { return ele.data("risky") ? "#dc2626" : "#94a3b8"; },
+          "target-arrow-shape": "triangle",
+          "curve-style": "bezier",
+          "label": "data(label)",
+          "font-size": 8.5,
+          "color": "#59636e",
+          "text-rotation": "autorotate",
+          "text-background-color": "#ffffff",
+          "text-background-opacity": 0.85,
+          "text-background-padding": 2
+        }
+      },
+      {
+        selector: ".dimmed",
+        style: { "opacity": 0.16 }
+      },
+      {
+        selector: "node:selected",
+        style: { "border-width": 4, "border-color": "#0f172a" }
+      }
+    ],
+    layout: { name: "cose", animate: false, padding: 24 }
+  });
+
+  function renderInspector(nodeEle) {
+    var nodeData = nodeEle.data();
+    inspector.textContent = "";
+    var h3 = document.createElement("h3");
+    h3.textContent = nodeData.label || nodeData.id;
+    inspector.appendChild(h3);
+
+    var meta = document.createElement("div");
+    meta.className = "muted";
+    meta.textContent = "Kind: " + (nodeData.kind || "unknown") + " | Risk tier: " + (nodeData.risk_tier || "neutral");
+    inspector.appendChild(meta);
+
+    if (nodeData.kind === "role") {
+      var btnWrap = document.createElement("div");
+      btnWrap.style.margin = "10px 0";
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = "Who can assume this role?";
+      btn.style.padding = "5px 10px";
+      btn.style.borderRadius = "6px";
+      btn.style.border = "1px solid #2563eb";
+      btn.style.background = "#eff6ff";
+      btn.style.color = "#1d4ed8";
+      btn.style.cursor = "pointer";
+      btn.addEventListener("click", function () {
+        var trustEdges = nodeEle.incomers('edge[edge_kind = "trusts"]');
+        var assumers = trustEdges.sources();
+        var pathSet = nodeEle.union(trustEdges).union(assumers);
+        cy.elements().addClass("dimmed");
+        pathSet.removeClass("dimmed");
+        if (pathSet.length > 0) {
+          cy.fit(pathSet, 40);
+        }
+      });
+      btnWrap.appendChild(btn);
+      inspector.appendChild(btnWrap);
+    }
+
+    var list = document.createElement("ul");
+    list.className = "compact";
+    (nodeData.details || []).forEach(function (line) {
+      var li = document.createElement("li");
+      li.textContent = line;
+      list.appendChild(li);
+    });
+    inspector.appendChild(list);
+  }
+
+  cy.on("tap", "node", function (evt) {
+    renderInspector(evt.target);
+  });
+
+  // Live table filtering for Top Risky Identities.
+  (function () {
+    var rows = Array.prototype.slice.call(document.querySelectorAll("#risky-table tbody tr.risky-row"));
+    if (rows.length === 0) { return; }
+    var searchEl = document.getElementById("tbl-search");
+    var typeEl = document.getElementById("tbl-type");
+    var agentEl = document.getElementById("tbl-agent");
+    var sevEl = document.getElementById("tbl-sev");
+    var countEl = document.getElementById("tbl-count");
+    var resetEl = document.getElementById("tbl-reset");
+
+    function filterTable() {
+      var q = (searchEl.value || "").trim().toLowerCase();
+      var wantType = typeEl.value;
+      var wantAgent = agentEl.value;
+      var wantSev = sevEl.value;
+      var visible = 0;
+
+      rows.forEach(function (tr) {
+        var okType = wantType === "all" || tr.getAttribute("data-type") === wantType;
+        var okAgent = wantAgent === "all" || tr.getAttribute("data-agent") === wantAgent;
+        var okSev = wantSev === "all" || tr.getAttribute("data-sev") === wantSev;
+        var okQ = !q || (tr.textContent || "").toLowerCase().indexOf(q) !== -1;
+        var show = okType && okAgent && okSev && okQ;
+        tr.style.display = show ? "" : "none";
+        if (show) { visible++; }
+      });
+      if (countEl) {
+        countEl.textContent = "Showing " + visible + " of " + rows.length;
+      }
+    }
+
+    searchEl.addEventListener("input", filterTable);
+    typeEl.addEventListener("change", filterTable);
+    agentEl.addEventListener("change", filterTable);
+    sevEl.addEventListener("change", filterTable);
+    resetEl.addEventListener("click", function () {
+      searchEl.value = "";
+      typeEl.value = "all";
+      agentEl.value = "all";
+      sevEl.value = "all";
+      filterTable();
+    });
+  })();
+
+  function applyFilters() {
+    var q = (document.getElementById("graph-search").value || "").trim().toLowerCase();
+    var enabledKinds = { role: true, user: true, key: true };
+    document.querySelectorAll(".kind-toggle").forEach(function (cb) {
+      enabledKinds[cb.value] = cb.checked;
+    });
+
+    cy.nodes().forEach(function (n) {
+      var kind = n.data("kind");
+      if (!enabledKinds[kind]) {
+        n.style("display", "none");
+      } else {
+        n.style("display", "element");
+      }
+    });
+
+    cy.elements().removeClass("dimmed");
+    if (q) {
+      var matched = cy.nodes().filter(function (n) {
+        var hay = ((n.data("label") || "") + " " + (n.data("arn") || "") + " " + (n.data("details") || []).join(" ")).toLowerCase();
+        return hay.indexOf(q) !== -1;
+      });
+      var hood = matched.closedNeighborhood();
+      cy.elements().difference(hood).addClass("dimmed");
+    }
+  }
+
+  document.getElementById("graph-search").addEventListener("input", applyFilters);
+  document.querySelectorAll(".kind-toggle").forEach(function (cb) {
+    cb.addEventListener("change", applyFilters);
+  });
+  document.getElementById("graph-layout").addEventListener("change", function (e) {
+    cy.layout({ name: e.target.value, animate: false, padding: 24 }).run();
+  });
+  document.getElementById("graph-reset").addEventListener("click", function () {
+    document.getElementById("graph-search").value = "";
+    document.querySelectorAll(".kind-toggle").forEach(function (cb) { cb.checked = true; });
+    applyFilters();
+    cy.fit(undefined, 24);
+  });
+})();
+</script>
+</body>
+</html>

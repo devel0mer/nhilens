@@ -1,0 +1,174 @@
+# Example configuration for nhilens (all fields are optional; defaults shown below).
+aws:
+  region: us-east-1
+
+agent_detection:
+  # Tag keys whose presence or matching values suggest an AI agent or automation identity.
+  agent_tag_keys:
+    - agent
+    - ai
+    - ai-agent
+    - workload-type
+    - automation
+  agent_tag_values:
+    - agent
+    - ai
+    - llm
+    - mcp
+    - autonomous
+    - bot
+    - automation
+  # Tag keys checked to determine identity ownership (absence triggers R3 no-owner).
+  owner_tag_keys:
+    - owner
+    - sponsor
+    - team
+    - maintainer
+    - created-by
+  # Delimiter-bounded AI-specific name tokens (+25 confidence, classifies as workload_kind=ai_agent).
+  # Matched independently of role_name_patterns; add custom org terms here (e.g. "assistant").
+  ai_name_tokens:
+    - agent
+    - agents
+    - ai
+    - llm
+    - bedrock
+    - mcp
+    - copilot
+    - rag
+    - claude
+    - gpt
+    - gemini
+    - openai
+    - anthropic
+    - langchain
+    - strands
+    - crewai
+    - autogen
+  # Infrastructure/CI/observability prefixes that suppress generic "agent"/"agents" AI attribution
+  # (e.g. jenkins-agent, datadog-agent, ssm-agent are downgraded to general automation instead of AI).
+  ai_name_exclusions:
+    - jenkins
+    - buildkite
+    - teamcity
+    - datadog
+    - ssm
+    - codedeploy
+    - cloudwatch
+    - splunk
+    - newrelic
+    - dynatrace
+    - grafana
+    - otel
+    - prometheus
+    - zabbix
+    - fluentd
+    - fluentbit
+    - filebeat
+    - vault
+    - consul
+    - puppet
+    - chef
+    - wazuh
+    - crowdstrike
+  # Regular expressions matched against IAM role/user names for general automation (+20 confidence).
+  # Delimiter boundaries avoid false positives on words like "special", "social", or "email".
+  role_name_patterns:
+    - "(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)"
+  # AWS service principals treated as automation/non-human workload principals.
+  automation_service_principals:
+    - lambda.amazonaws.com
+    - ecs-tasks.amazonaws.com
+    - bedrock.amazonaws.com
+    - codebuild.amazonaws.com
+    - codepipeline.amazonaws.com
+    - states.amazonaws.com
+    - sagemaker.amazonaws.com
+    - scheduler.amazonaws.com
+    - events.amazonaws.com
+  # OIDC provider host hints treated as workload/CI/agent federation.
+  oidc_provider_hints:
+    - token.actions.githubusercontent.com
+    - gitlab.com
+    - oidc.eks.
+    - accounts.google.com
+  # AWS AI/LLM service namespaces checked in explicit policy permissions,
+  # IAM Access Advisor usage, and CloudTrail management events.
+  ai_service_namespaces:
+    - bedrock
+    - bedrock-runtime
+    - bedrock-agent
+    - bedrock-agent-runtime
+    - bedrock-agentcore
+    - sagemaker
+    - sagemaker-runtime
+    - q
+    - qbusiness
+  # CloudTrail userAgent hints matching AI/agent frameworks (strong signal: +40 confidence).
+  ai_framework_user_agents:
+    - langchain
+    - langgraph
+    - strands
+    - crewai
+    - autogen
+    - llamaindex
+    - mcp
+    - bedrock-agent
+    - claude
+    - anthropic
+    - openai
+  # CloudTrail userAgent hints matching generic AWS SDKs (gentle automation signal: +15 confidence).
+  sdk_user_agents:
+    - boto3
+    - botocore
+    - aws-sdk-
+
+rules:
+  stale_days: 90
+  key_max_age_days: 90
+  min_shared_key_ips: 2
+  # AWS service-linked roles (/aws-service-role/) are inventoried and labeled,
+  # but excluded from risk findings by default to avoid noise.
+  include_service_linked_roles: false
+  # Service principals checked by R5 for missing aws:SourceArn / aws:SourceAccount
+  # (cross-service confused-deputy protection).
+  confused_deputy_service_principals:
+    - bedrock.amazonaws.com
+    - sagemaker.amazonaws.com
+    - scheduler.amazonaws.com
+    - events.amazonaws.com
+    - codebuild.amazonaws.com
+    - codepipeline.amazonaws.com
+    - states.amazonaws.com
+    - cloudtrail.amazonaws.com
+    - delivery.logs.amazonaws.com
+    - backup.amazonaws.com
+  enabled:
+    R1: true
+    R2: true
+    R3: true
+    R4: true
+    R5: true
+    R6: true
+    R7: true
+    R8: true
+
+scoring:
+  weights:
+    critical: 4.0
+    high: 3.0
+    medium: 2.0
+    low: 1.0
+    info: 0.5
+  agent_likely_bonus: 1.5
+  # Added when high/critical privilege (R1 or R6) combines with high/critical loose trust (R5).
+  compound_exposure_bonus: 2.0
+  max_score: 10.0
+  # Smooth saturation curve: score = max_score * (1 - exp(-raw / saturation_scale))
+  # Preserves ranking separation among high-risk identities instead of clipping flat at 10.0.
+  saturation_scale: 6.5
+
+output:
+  dir: ./nhilens-out
+  db_file: nhilens.db
+  report_file: report.html

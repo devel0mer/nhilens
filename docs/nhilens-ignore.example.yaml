@@ -1,0 +1,16 @@
+# Example .nhilens-ignore.yaml baseline/suppression file.
+# Pass via: nhilens scan --ignore .nhilens-ignore.yaml
+#
+# Every suppression requires a non-empty `reason` for auditability.
+# Optional `expires` (YYYY-MM-DD or RFC3339) ensures temporary risk acceptances
+# automatically expire and resurface with a warning after the review date.
+suppressions:
+  - rule_id: R3
+    identity: "arn:aws:iam::123456789012:role/legacy-vendor-*"
+    reason: "Legacy connector scheduled for retirement in Q2 (TICKET-1042)"
+    expires: "2027-06-30"
+
+  - rule_id: R2
+    identity: "breakglass-readonly-role"
+    reason: "Break-glass incident role is intentionally unused outside emergencies"
+    expires: "2027-12-31"
