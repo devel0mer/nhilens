@@ -92,7 +92,7 @@ func TestWriteSARIFMarkdownAndCSV(t *testing.T) {
 		t.Fatalf("WriteMarkdown failed: %v", err)
 	}
 	md := mdBuf.String()
-	for _, want := range []string{"# nhilens Audit Report", "## Summary", "## Top 10 Risky Identities", "## Findings by Rule", "## Limitations", "Suppressed Findings"} {
+	for _, want := range []string{"# nhilens Audit Report", "## Summary", "Single-region CloudTrail scope:", "region `us-east-1` only", "## Top 10 Risky Identities", "## Findings by Rule", "## Limitations", "Suppressed Findings"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("Markdown output missing %q", want)
 		}

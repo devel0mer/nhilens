@@ -35,7 +35,13 @@ func WriteMarkdown(w io.Writer, run *model.ScanRun) error {
 	if run.SuppressedFindingCount > 0 {
 		_, _ = fmt.Fprintf(w, "| Suppressed Findings | %d (via baseline ignore file) |\n", run.SuppressedFindingCount)
 	}
-	_, _ = fmt.Fprintf(w, "| CloudTrail Attribution | `%s` (%d events, `%s` window) |\n\n", s.CloudTrailStatus, s.CloudTrailEventCount, s.SinceWindow)
+	if s.CloudTrailStatus == model.CloudTrailStatusDisabled {
+		_, _ = fmt.Fprintf(w, "| CloudTrail Attribution | `disabled` (skipped via `--max-events=0`) |\n\n")
+		_, _ = fmt.Fprintf(w, "> **CloudTrail disabled:** Lookup was skipped (`--max-events=0`). Agent `userAgent` traces, 30d activity, and R4 multi-IP key checks were not performed.\n\n")
+	} else {
+		_, _ = fmt.Fprintf(w, "| CloudTrail Attribution | `%s` (%d events, `%s` window, **region `%s` only**) |\n\n", s.CloudTrailStatus, s.CloudTrailEventCount, s.SinceWindow, s.Region)
+		_, _ = fmt.Fprintf(w, "> **Single-region CloudTrail scope:** CloudTrail `LookupEvents` inspected region `%s` only. Agent `userAgent` traces, 30d activity, and R4 multi-IP key findings do not include activity in other AWS regions.\n\n", s.Region)
+	}
 
 	cov := data.Coverage
 	_, _ = fmt.Fprintf(w, "## Scan Coverage\n\n")

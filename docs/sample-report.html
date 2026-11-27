@@ -39,8 +39,9 @@
     padding: 24px 32px;
     border-bottom: 3px solid var(--accent);
   }
-  header h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.02em; }
-  header .subtitle { color: #94a3b8; font-size: 14px; }
+  header h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; }
+  header .tagline { color: #e2e8f0; font-size: 14.5px; margin: 0 0 8px; font-weight: 500; }
+  header .subtitle { color: #94a3b8; font-size: 13.5px; }
   main { max-width: 1360px; margin: 0 auto; padding: 24px 28px 56px; }
   .banner-warn {
     background: #fffbeb;
@@ -51,6 +52,16 @@
     margin-bottom: 24px;
     font-size: 13.5px;
     color: #78350f;
+  }
+  .banner-scope {
+    background: #eff6ff;
+    border: 1px solid #93c5fd;
+    border-left: 5px solid #2563eb;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #1e3a8a;
   }
   h2 {
     font-size: 19px;
@@ -103,6 +114,7 @@
   .agent-possible { color: #0369a1; background: #f0f9ff; border: 1px solid #bae6fd; }
   .agent-none { color: var(--muted); background: #f8fafc; border: 1px solid var(--border); }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12.5px; }
+  td .mono { overflow-wrap: anywhere; }
   .muted { color: var(--muted); font-size: 12.5px; }
   ul.compact { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; }
   ul.compact li { margin-bottom: 2px; }
@@ -213,6 +225,7 @@
 <body>
 <header>
   <h1>nhilens — AWS Non-Human Identity &amp; AI Agent Audit Report</h1>
+  <div class="tagline">Which AI agents and non-human identities are running in your AWS account — and what can they do?</div>
   <div class="subtitle">
     Account <span class="mono">111122223333</span> &middot;
     Region <span class="mono">us-east-1</span> &middot;
@@ -230,72 +243,37 @@
   <div class="cards">
     <div class="card">
       <div class="label">Total Identities</div>
-      <div class="value">6</div>
-      <div class="sub">4 roles &middot; 1 users &middot; 1 keys (1 service-linked)</div>
+      <div class="value">7</div>
+      <div class="sub">5 roles &middot; 1 users &middot; 1 keys (1 service-linked)</div>
     </div>
     <div class="card">
       <div class="label">Heuristic AI / Automation</div>
-      <div class="value">2 <span style="font-size:14px;font-weight:500;">likely</span></div>
+      <div class="value">3 <span style="font-size:14px;font-weight:500;">likely</span></div>
       <div class="sub">3 possible (heuristic signals only)</div>
     </div>
     <div class="card">
       <div class="label">Total Findings</div>
-      <div class="value">6</div>
-      <div class="sub">1 critical &middot; 2 high &middot; 3 medium &middot; 0 low</div>
+      <div class="value">10</div>
+      <div class="sub">2 critical &middot; 3 high &middot; 5 medium &middot; 0 low</div>
     </div>
     <div class="card">
       <div class="label">Unowned Non-Human</div>
-      <div class="value">1</div>
+      <div class="value">2</div>
       <div class="sub">Roles/users without configured owner tag</div>
     </div>
     <div class="card">
       <div class="label">CloudTrail Attribution</div>
       <div class="value" style="font-size:20px;text-transform:uppercase;">ok</div>
-      <div class="sub">318 management events (90d window)</div>
+      <div class="sub">318 management events (90d &middot; <strong>us-east-1 only</strong>)</div>
     </div>
   </div>
+  
+  <div class="banner-scope">
+    <strong>Single-region CloudTrail scope:</strong> CloudTrail <span class="mono">LookupEvents</span> inspected region <span class="mono">us-east-1</span> only. Agent <span class="mono">userAgent</span> traces, 30d activity, and R4 multi-IP key activity in other AWS regions are not included &mdash; &ldquo;none&rdquo; here does not guarantee zero activity in other regions.
+  </div>
+  
 
-  <h2>Scan Coverage &amp; Data Completeness</h2>
-  <div class="panel">
-    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px;">
-      <strong>Overall coverage:</strong>
-      <span class="badge sev-clean">complete</span>
-      
-    </div>
-    <table>
-      <tbody>
-        <tr>
-          <th style="width:220px;">Account / Region / Window</th>
-          <td class="mono">111122223333 &middot; us-east-1 (regional CloudTrail) &middot; 90d</td>
-        </tr>
-        <tr>
-          <th>CloudTrail Events</th>
-          <td>
-            <span class="badge sev-info">ok</span>
-            318 analyzed
-            
-          </td>
-        </tr>
-        <tr>
-          <th>IAM Login Profiles</th>
-          <td>0 checked, 0 failed</td>
-        </tr>
-        <tr>
-          <th>Access Advisor (R2)</th>
-          <td>
-            
-              0 / 0 succeeded (0 failed; 0 excluded SLR, 0 zero-policy skipped)
-            
-          </td>
-        </tr>
-        <tr>
-          <th>Guardrails &amp; Scope</th>
-          <td>0 SCP guardrail policy(ies) loaded &middot; 1 service-linked role(s) excluded &middot; 0 partial identity(ies) &middot; 0 collection error(s)</td>
-        </tr>
-        
-      </tbody>
-    </table>
-  </div>
+  
 
   
 
@@ -330,7 +308,7 @@
         </select>
       </label>
       <button id="tbl-reset" type="button">Reset Filters</button>
-      <span class="muted" id="tbl-count">Showing 3 of 3</span>
+      <span class="muted" id="tbl-count">Showing 4 of 4</span>
     </div>
     <table id="risky-table">
       <thead>
@@ -344,6 +322,57 @@
         </tr>
       </thead>
       <tbody>
+        
+        <tr class="risky-row" data-type="role" data-agent="likely" data-sev="critical">
+          <td>
+            <span class="badge sev-critical">8.5 / 10</span>
+            <div class="muted mono" style="margin-top:4px;">raw 12.5</div>
+          </td>
+          <td>
+            <div><strong>mcp-ops-agent</strong> <span class="badge sev-info">role</span></div>
+            <div class="mono muted">arn:aws:iam::111122223333:role/mcp-ops-agent</div>
+            
+            <div class="muted">AI services: <span class="mono">bedrock</span></div>
+            
+          </td>
+          <td>
+            <span class="badge agent-likely">likely (100%)</span>
+            <span class="badge sev-info">ai_agent</span>
+            <span class="badge sev-info">mcp-or-framework-agent</span>
+            
+            <ul class="compact">
+              <li>tag workload=&#34;mcp-agent&#34; contains configured agent token &#34;mcp&#34;</li><li>name &#34;mcp-ops-agent&#34; contains configured AI name token &#34;agent&#34;</li><li>name &#34;mcp-ops-agent&#34; contains configured AI name token &#34;mcp&#34;</li><li>trust policy allows automation service principal ecs-tasks.amazonaws.com</li><li>policies explicitly grant AI/LLM service permission(s): bedrock</li><li>observed runtime activity in AI/LLM service(s): bedrock</li><li>CloudTrail userAgent matches AI framework trace(s): anthropic</li><li>matched profile &#34;mcp-or-framework-agent&#34;</li>
+            </ul>
+            
+          </td>
+          <td class="mono">&lt;none&gt;</td>
+          <td>
+            
+              <span class="badge sev-medium">R2 unused-permissions</span>
+            
+              <span class="badge sev-medium">R3 no-owner</span>
+            
+              <span class="badge sev-critical">R6 privilege-escalation-path</span>
+            
+              <span class="badge sev-high">R7 sensitive-service-wildcard</span>
+            
+            
+            <div class="muted" style="margin-top:6px;"><strong>Why 8.5/10?</strong> 8.5/10 (raw 12.5): R2 unused-permissions (medium) (&#43;2.0) &#43; R3 no-owner (medium) (&#43;2.0) &#43; R6 privilege-escalation-path (critical) (&#43;4.0) &#43; R7 sensitive-service-wildcard (high) (&#43;3.0) &#43; agent_likelihood=likely bonus (&#43;1.5)</div>
+            
+            
+            <ul class="compact muted">
+              <li>R2 unused-permissions (medium): +2.0</li><li>R3 no-owner (medium): +2.0</li><li>R6 privilege-escalation-path (critical): +4.0</li><li>R7 sensitive-service-wildcard (high): +3.0</li><li>agent_likelihood=likely bonus: +1.5</li>
+            </ul>
+            
+          </td>
+          <td class="muted">
+            <div>Last used: 2026-11-23</div>
+            <div><strong>30d:</strong> <span class="mono">84 calls in 30d: bedrock:InvokeModel (61), secretsmanager:GetSecretValue (23)</span></div>
+            <div>User-Agents: <span class="mono">anthropic-sdk-python/0.49.0 Boto3/1.35.0</span></div>
+            
+            
+          </td>
+        </tr>
         
         <tr class="risky-row" data-type="role" data-agent="likely" data-sev="critical">
           <td>
@@ -491,6 +520,53 @@
     
   </div>
 
+  <h2>Scan Coverage &amp; Data Completeness</h2>
+  <div class="panel">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px;">
+      <strong>Overall coverage:</strong>
+      <span class="badge sev-clean">complete</span>
+      
+    </div>
+    <table>
+      <tbody>
+        <tr>
+          <th style="width:220px;">Account / Region / Window</th>
+          <td class="mono">111122223333 &middot; us-east-1 (regional CloudTrail) &middot; 90d</td>
+        </tr>
+        <tr>
+          <th>CloudTrail Events</th>
+          <td>
+            <span class="badge sev-info">ok</span>
+            318 analyzed
+            (limit 5000)
+          </td>
+        </tr>
+        <tr>
+          <th>IAM Login Profiles</th>
+          <td>1 checked, 0 failed</td>
+        </tr>
+        <tr>
+          <th>Access Advisor (R2)</th>
+          <td>
+            
+              5 / 5 succeeded (0 failed; 1 excluded SLR, 0 zero-policy skipped)
+            
+          </td>
+        </tr>
+        <tr>
+          <th>Guardrails &amp; Scope</th>
+          <td>0 SCP guardrail policy(ies) loaded &middot; 1 service-linked role(s) excluded &middot; 0 partial identity(ies) &middot; 0 collection error(s)</td>
+        </tr>
+        
+        <tr>
+          <th>Skipped Checks</th>
+          <td>1 AWS service-linked role(s) excluded by default</td>
+        </tr>
+        
+      </tbody>
+    </table>
+  </div>
+
   <h2>Findings by Rule</h2>
   
   <div class="rule-card">
@@ -544,7 +620,7 @@
       <div>
         <strong>R2 &mdash; unused-permissions</strong>
         <span class="badge sev-medium">
-          1 finding(s) &middot; medium
+          2 finding(s) &middot; medium
         </span>
       </div>
     </div>
@@ -563,6 +639,21 @@
           </tr>
         </thead>
         <tbody>
+          
+          <tr>
+            <td>
+              <strong>mcp-ops-agent</strong> <span class="badge sev-info">role</span>
+              <div class="mono muted">arn:aws:iam::111122223333:role/mcp-ops-agent</div>
+            </td>
+            <td><span class="badge sev-medium">medium</span></td>
+            <td><span class="badge agent-likely">likely</span></td>
+            <td><span class="badge sev-critical">8.5/10</span></td>
+            <td>
+              <ul class="compact">
+                <li>1 of 3 granted service(s) unused within the 90d window</li><li>lambda (never accessed)</li>
+              </ul>
+            </td>
+          </tr>
           
           <tr>
             <td>
@@ -590,7 +681,7 @@
       <div>
         <strong>R3 &mdash; no-owner</strong>
         <span class="badge sev-medium">
-          1 finding(s) &middot; medium
+          2 finding(s) &middot; medium
         </span>
       </div>
     </div>
@@ -609,6 +700,21 @@
           </tr>
         </thead>
         <tbody>
+          
+          <tr>
+            <td>
+              <strong>mcp-ops-agent</strong> <span class="badge sev-info">role</span>
+              <div class="mono muted">arn:aws:iam::111122223333:role/mcp-ops-agent</div>
+            </td>
+            <td><span class="badge sev-medium">medium</span></td>
+            <td><span class="badge agent-likely">likely</span></td>
+            <td><span class="badge sev-critical">8.5/10</span></td>
+            <td>
+              <ul class="compact">
+                <li>none of the configured owner tag keys matched: owner, sponsor, team, maintainer, created-by</li><li>existing tag keys: env, workload</li>
+              </ul>
+            </td>
+          </tr>
           
           <tr>
             <td>
@@ -742,14 +848,44 @@
     <div class="rule-head">
       <div>
         <strong>R6 &mdash; privilege-escalation-path</strong>
-        <span class="badge sev-clean">
-          0 findings
+        <span class="badge sev-critical">
+          1 finding(s) &middot; critical
         </span>
       </div>
     </div>
     <div class="rule-body">
-      <div class="muted">Flags explicit IAM write/escalation permissions (iam:AttachRolePolicy, iam:PutRolePolicy, iam:CreatePolicyVersion, iam:CreateAccessKey, iam:UpdateAssumeRolePolicy, etc.) on Resource:*, iam:PassRole on Resource:* without iam:PassedToService (critical when paired with compute/AI launch permissions), and sts:AssumeRole on Resource:*.</div>
-      <div class="remediation"><strong>Remediation hint:</strong> Remove IAM mutation permissions from workload roles, scope iam:PassRole to exact role ARNs plus iam:PassedToService, and restrict sts:AssumeRole to explicit target role ARNs.</div>
+      <div class="muted">After intersecting identity policies, explicit Denies, permissions boundaries, and provided SCPs, this non-human identity retains an actionable IAM escalation, PassRole, or privileged AssumeRole path that a compromised agent or prompt injection could abuse.</div>
+      <div class="remediation"><strong>Remediation hint:</strong> Remove unnecessary IAM mutation permissions from workload/agent identities; restrict iam:PassRole to exact low-privilege role ARNs plus iam:PassedToService; and scope sts:AssumeRole to explicit non-privileged target role ARNs. Run `nhilens explain R6` for examples.</div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>Identity</th>
+            <th>Severity</th>
+            <th>Agent</th>
+            <th>Score</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>mcp-ops-agent</strong> <span class="badge sev-info">role</span>
+              <div class="mono muted">arn:aws:iam::111122223333:role/mcp-ops-agent</div>
+            </td>
+            <td><span class="badge sev-critical">critical</span></td>
+            <td><span class="badge agent-likely">likely</span></td>
+            <td><span class="badge sev-critical">8.5/10</span></td>
+            <td>
+              <ul class="compact">
+                <li>inline policy &#34;mcp-ops-inline&#34; allows effective iam:PassRole on Resource:* without iam:PassedToService combined with compute/AI launch action(s) [lambda:createfunction] (PassRole privilege-escalation path; reachable privileged target role(s): bedrock-support-agent (admin wildcard))</li>
+              </ul>
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
       
     </div>
   </div>
@@ -758,14 +894,44 @@
     <div class="rule-head">
       <div>
         <strong>R7 &mdash; sensitive-service-wildcard</strong>
-        <span class="badge sev-clean">
-          0 findings
+        <span class="badge sev-high">
+          1 finding(s) &middot; high
         </span>
       </div>
     </div>
     <div class="rule-body">
-      <div class="muted">Flags unconditioned Resource:* permissions for high-value secret stores (kms:*, kms:Decrypt, secretsmanager:*, secretsmanager:GetSecretValue, ssm:*, ssm:GetParameter*) and full AI control planes (bedrock:*, sagemaker:*). Conditioned statements are downgraded from high to medium.</div>
-      <div class="remediation"><strong>Remediation hint:</strong> Scope KMS, Secrets Manager, and SSM permissions to specific ARNs or path prefixes, and replace bedrock:*/sagemaker:* with explicit invoke actions on approved model/endpoint ARNs.</div>
+      <div class="muted">This non-human identity effectively retains read or administrative access to secrets/keys (KMS, Secrets Manager, SSM Parameter Store) or full AI control planes (bedrock:*, sagemaker:*) across Resource &#34;*&#34; after intersecting explicit Denies, permissions boundaries, and provided SCPs.</div>
+      <div class="remediation"><strong>Remediation hint:</strong> Scope KMS, Secrets Manager, and SSM Parameter Store policies to specific secret/key/parameter ARNs or path prefixes, and replace bedrock:*/sagemaker:* with explicit runtime invocation actions scoped to approved model/endpoint ARNs. Run `nhilens explain R7` for examples.</div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>Identity</th>
+            <th>Severity</th>
+            <th>Agent</th>
+            <th>Score</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>mcp-ops-agent</strong> <span class="badge sev-info">role</span>
+              <div class="mono muted">arn:aws:iam::111122223333:role/mcp-ops-agent</div>
+            </td>
+            <td><span class="badge sev-high">high</span></td>
+            <td><span class="badge agent-likely">likely</span></td>
+            <td><span class="badge sev-critical">8.5/10</span></td>
+            <td>
+              <ul class="compact">
+                <li>inline policy &#34;mcp-ops-inline&#34; grants unconditioned broad access to [secretsmanager:GetSecretValue on Resource:*]</li>
+              </ul>
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
       
     </div>
   </div>
@@ -803,7 +969,7 @@
       <label><input type="checkbox" class="kind-toggle" value="boundary" checked> Boundaries</label>
       <button id="graph-reset" type="button">Reset View</button>
       <span class="muted">
-        13 nodes, 9 edges
+        16 nodes, 11 edges
         (1 unflagged AWS service-linked roles omitted)
       </span>
     </div>
@@ -857,11 +1023,11 @@
 
   <footer>
     <span>Generated by nhilens 0.0.0-dev (commit: none, built: unknown) (strictly read-only AWS audit)</span>
-    <span>Generated 2026-11-25 16:33:16 UTC</span>
+    <span>Generated 2026-11-27 10:43:48 UTC</span>
   </footer>
 </main>
 
-<script id="nhilens-graph-data" type="application/json">{"nodes":[{"data":{"id":"boundary_f46839db3fc0d927","label":"Boundary: sandbox-boundary","kind":"boundary","risk_tier":"neutral","arn":"arn:aws:iam::111122223333:policy/sandbox-boundary","details":["Attached IAM Permissions Boundary","ARN: arn:aws:iam::111122223333:policy/sandbox-boundary","Note: nhilens intersects boundaries at the action level across R1, R6, and R7; resource and session policies are not evaluated."]}},{"data":{"id":"id_6ccab03c8602cb2f","label":"lambda-doc-summarizer-agent","kind":"role","risk_tier":"clean","arn":"arn:aws:iam::111122223333:role/lambda-doc-summarizer-agent","agent_likelihood":"likely","owner":"ai-platform","details":["Type: role","ARN: arn:aws:iam::111122223333:role/lambda-doc-summarizer-agent","Risk score: 0.0 / 10 (raw 0.0)","Agent likelihood (heuristic): likely (100%) {ai_agent} [lambda-ai-invoker]","Owner: ai-platform","AI/LLM services: bedrock","Agent signals: tag agent=\"true\" matches configured agent tag key; tag owner=\"ai-platform\" contains configured agent token \"ai\"; name \"lambda-doc-summarizer-agent\" contains configured AI name token \"agent\"; trust policy allows automation service principal lambda.amazonaws.com; policies explicitly grant AI/LLM service permission(s): bedrock; observed runtime activity in AI/LLM service(s): bedrock; matched profile \"lambda-ai-invoker\""]}},{"data":{"id":"id_8bbe382a8603cb02","label":"ci-bot-user","kind":"user","risk_tier":"clean","arn":"arn:aws:iam::111122223333:user/ci-bot-user","agent_likelihood":"possible","owner":"platform-team","details":["Type: user","ARN: arn:aws:iam::111122223333:user/ci-bot-user","Risk score: 0.0 / 10 (raw 0.0)","Agent likelihood (heuristic): possible (45%) {automation} [programmatic-key-bot]","Owner: platform-team","Agent signals: name \"ci-bot-user\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; IAM user has 1 access key(s) and no console login profile (automation signal); matched profile \"programmatic-key-bot\""]}},{"data":{"id":"id_c354859f48df07dd","label":"AKIAEXAMPLE111111111\n(ci-bot-user)","kind":"key","risk_tier":"medium","arn":"arn:aws:iam::111122223333:user/ci-bot-user","score":3.7,"agent_likelihood":"possible","owner":"platform-team","details":["Type: key","ARN: arn:aws:iam::111122223333:user/ci-bot-user","Risk score: 3.7 / 10 (raw 3.0)","Agent likelihood (heuristic): possible (45%) {automation} [programmatic-key-bot]","Owner: platform-team","Why this score: 3.7/10 (raw 3.0): R4 stale-or-shared-key (high) (+3.0)","Agent signals: name \"ci-bot-user\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; access key belongs to programmatic IAM user \"ci-bot-user\" with no console login profile (automation signal); matched profile \"programmatic-key-bot\"","Findings: R4 (high)","Observed IPs (best-effort): 198.51.100.14, 203.0.113.88","Recent CloudTrail actions: s3:ListBuckets, sts:GetCallerIdentity"]}},{"data":{"id":"id_d5e1cdd7aed23ee0","label":"gh-wildcard-deploy","kind":"role","risk_tier":"medium","arn":"arn:aws:iam::111122223333:role/gh-wildcard-deploy","score":3.7,"agent_likelihood":"possible","owner":"devops-team","details":["Type: role","ARN: arn:aws:iam::111122223333:role/gh-wildcard-deploy","Risk score: 3.7 / 10 (raw 3.0)","Agent likelihood (heuristic): possible (45%) {automation} [ci-oidc-automation]","Owner: devops-team","Why this score: 3.7/10 (raw 3.0): R5 loose-trust (high) (+3.0)","Agent signals: name \"gh-wildcard-deploy\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; trust policy federates with OIDC/workload provider matching \"token.actions.githubusercontent.com\" (arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com); matched profile \"ci-oidc-automation\"","Findings: R5 (high)","Recent CloudTrail actions: sts:AssumeRoleWithWebIdentity, s3:PutObject"]}},{"data":{"id":"id_d606600300c8adae","label":"bedrock-support-agent","kind":"role","risk_tier":"critical","arn":"arn:aws:iam::111122223333:role/bedrock-support-agent","score":8.3,"agent_likelihood":"likely","owner":"\u003cnone\u003e","details":["Type: role","ARN: arn:aws:iam::111122223333:role/bedrock-support-agent","Risk score: 8.3 / 10 (raw 11.5)","Agent likelihood (heuristic): likely (100%) {ai_agent} [bedrock-agent]","Owner: \u003cnone\u003e","Why this score: 8.3/10 (raw 11.5): R1 wildcard-permissions (critical) (+4.0) + R2 unused-permissions (medium) (+2.0) + R3 no-owner (medium) (+2.0) + R5 loose-trust (medium) (+2.0) + agent_likelihood=likely bonus (+1.5)","AI/LLM services: bedrock","CloudTrail userAgents: langchain-aws/0.2.1 Boto3/1.35.0","30d activity: 148 calls in 30d: bedrock:InvokeModel (112), s3:GetObject (36)","Permissions boundary: arn:aws:iam::111122223333:policy/sandbox-boundary","Agent signals: tag agent=\"true\" matches configured agent tag key; name \"bedrock-support-agent\" contains configured AI name token \"agent\"; name \"bedrock-support-agent\" contains configured AI name token \"bedrock\"; trust policy allows automation service principal bedrock.amazonaws.com; observed runtime activity in AI/LLM service(s): bedrock; CloudTrail userAgent matches AI framework trace(s): langchain; matched profile \"bedrock-agent\"","Findings: R1 (critical), R2 (medium), R3 (medium), R5 (medium)","Recent CloudTrail actions: bedrock:InvokeModel, s3:GetObject"]}},{"data":{"id":"pol_1b8ef8815852746e","label":"bedrock-invoke-scoped","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_76bc1175bb0d3933","label":"ci-read-s3","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_791414c331f6718b","label":"deploy-inline","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_88576c093ec14da8","label":"AdministratorAccess","kind":"policy","risk_tier":"critical","arn":"arn:aws:iam::aws:policy/AdministratorAccess","details":["Kind: managed","ARN: arn:aws:iam::aws:policy/AdministratorAccess","Grants wildcard admin permissions (Action:* Resource:* or AdministratorAccess)"]}},{"data":{"id":"trust_0ee79436e677e32b","label":"OIDC: token.actions.githubusercontent.com","kind":"trust","risk_tier":"high","details":["Principal type: oidc","Principal: arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com","Actions: sts:AssumeRoleWithWebIdentity"]}},{"data":{"id":"trust_74d00fc85cf4e9cd","label":"bedrock.amazonaws.com","kind":"trust","risk_tier":"neutral","details":["Principal type: service","Principal: bedrock.amazonaws.com","Actions: sts:AssumeRole"]}},{"data":{"id":"trust_f6865b389aaf22ba","label":"lambda.amazonaws.com","kind":"trust","risk_tier":"neutral","details":["Principal type: service","Principal: lambda.amazonaws.com","Actions: sts:AssumeRole"]}}],"edges":[{"data":{"id":"edge_1d5b52f864c802fd","source":"trust_74d00fc85cf4e9cd","target":"id_d606600300c8adae","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_4d3e890306072d90","source":"id_6ccab03c8602cb2f","target":"pol_1b8ef8815852746e","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_5b3eb97cee2607c9","source":"id_8bbe382a8603cb02","target":"id_c354859f48df07dd","label":"key","edge_kind":"has_key","risky":true}},{"data":{"id":"edge_8bd63445e11ed834","source":"trust_f6865b389aaf22ba","target":"id_6ccab03c8602cb2f","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_95810b9c58cbecbd","source":"trust_0ee79436e677e32b","target":"id_d5e1cdd7aed23ee0","label":"assumes","edge_kind":"trusts","risky":true}},{"data":{"id":"edge_a130883dc5a82169","source":"id_d606600300c8adae","target":"boundary_f46839db3fc0d927","label":"boundary","edge_kind":"bounded_by"}},{"data":{"id":"edge_c33ed8808c1e56b7","source":"id_d5e1cdd7aed23ee0","target":"pol_791414c331f6718b","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_c5130e3eb543a794","source":"id_d606600300c8adae","target":"pol_88576c093ec14da8","label":"managed","edge_kind":"has_policy","risky":true}},{"data":{"id":"edge_df523a011fca2624","source":"id_8bbe382a8603cb02","target":"pol_76bc1175bb0d3933","label":"inline","edge_kind":"has_policy"}}],"omitted_service_linked":1}</script>
+<script id="nhilens-graph-data" type="application/json">{"nodes":[{"data":{"id":"boundary_f46839db3fc0d927","label":"Boundary: sandbox-boundary","kind":"boundary","risk_tier":"neutral","arn":"arn:aws:iam::111122223333:policy/sandbox-boundary","details":["Attached IAM Permissions Boundary","ARN: arn:aws:iam::111122223333:policy/sandbox-boundary","Note: nhilens intersects boundaries at the action level across R1, R6, and R7; resource and session policies are not evaluated."]}},{"data":{"id":"id_6ccab03c8602cb2f","label":"lambda-doc-summarizer-agent","kind":"role","risk_tier":"clean","arn":"arn:aws:iam::111122223333:role/lambda-doc-summarizer-agent","agent_likelihood":"likely","owner":"ai-platform","details":["Type: role","ARN: arn:aws:iam::111122223333:role/lambda-doc-summarizer-agent","Risk score: 0.0 / 10 (raw 0.0)","Agent likelihood (heuristic): likely (100%) {ai_agent} [lambda-ai-invoker]","Owner: ai-platform","AI/LLM services: bedrock","Agent signals: tag agent=\"true\" matches configured agent tag key; tag owner=\"ai-platform\" contains configured agent token \"ai\"; name \"lambda-doc-summarizer-agent\" contains configured AI name token \"agent\"; trust policy allows automation service principal lambda.amazonaws.com; policies explicitly grant AI/LLM service permission(s): bedrock; observed runtime activity in AI/LLM service(s): bedrock; matched profile \"lambda-ai-invoker\""]}},{"data":{"id":"id_8bbe382a8603cb02","label":"ci-bot-user","kind":"user","risk_tier":"clean","arn":"arn:aws:iam::111122223333:user/ci-bot-user","agent_likelihood":"possible","owner":"platform-team","details":["Type: user","ARN: arn:aws:iam::111122223333:user/ci-bot-user","Risk score: 0.0 / 10 (raw 0.0)","Agent likelihood (heuristic): possible (45%) {automation} [programmatic-key-bot]","Owner: platform-team","Agent signals: name \"ci-bot-user\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; IAM user has 1 access key(s) and no console login profile (automation signal); matched profile \"programmatic-key-bot\""]}},{"data":{"id":"id_c354859f48df07dd","label":"AKIAEXAMPLE111111111\n(ci-bot-user)","kind":"key","risk_tier":"medium","arn":"arn:aws:iam::111122223333:user/ci-bot-user","score":3.7,"agent_likelihood":"possible","owner":"platform-team","details":["Type: key","ARN: arn:aws:iam::111122223333:user/ci-bot-user","Risk score: 3.7 / 10 (raw 3.0)","Agent likelihood (heuristic): possible (45%) {automation} [programmatic-key-bot]","Owner: platform-team","Why this score: 3.7/10 (raw 3.0): R4 stale-or-shared-key (high) (+3.0)","Agent signals: name \"ci-bot-user\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; access key belongs to programmatic IAM user \"ci-bot-user\" with no console login profile (automation signal); matched profile \"programmatic-key-bot\"","Findings: R4 (high)","Observed IPs (best-effort): 198.51.100.14, 203.0.113.88","Recent CloudTrail actions: s3:ListBuckets, sts:GetCallerIdentity"]}},{"data":{"id":"id_d5e1cdd7aed23ee0","label":"gh-wildcard-deploy","kind":"role","risk_tier":"medium","arn":"arn:aws:iam::111122223333:role/gh-wildcard-deploy","score":3.7,"agent_likelihood":"possible","owner":"devops-team","details":["Type: role","ARN: arn:aws:iam::111122223333:role/gh-wildcard-deploy","Risk score: 3.7 / 10 (raw 3.0)","Agent likelihood (heuristic): possible (45%) {automation} [ci-oidc-automation]","Owner: devops-team","Why this score: 3.7/10 (raw 3.0): R5 loose-trust (high) (+3.0)","Agent signals: name \"gh-wildcard-deploy\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; trust policy federates with OIDC/workload provider matching \"token.actions.githubusercontent.com\" (arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com); matched profile \"ci-oidc-automation\"","Findings: R5 (high)","Recent CloudTrail actions: sts:AssumeRoleWithWebIdentity, s3:PutObject"]}},{"data":{"id":"id_d606600300c8adae","label":"bedrock-support-agent","kind":"role","risk_tier":"critical","arn":"arn:aws:iam::111122223333:role/bedrock-support-agent","score":8.3,"agent_likelihood":"likely","owner":"\u003cnone\u003e","details":["Type: role","ARN: arn:aws:iam::111122223333:role/bedrock-support-agent","Risk score: 8.3 / 10 (raw 11.5)","Agent likelihood (heuristic): likely (100%) {ai_agent} [bedrock-agent]","Owner: \u003cnone\u003e","Why this score: 8.3/10 (raw 11.5): R1 wildcard-permissions (critical) (+4.0) + R2 unused-permissions (medium) (+2.0) + R3 no-owner (medium) (+2.0) + R5 loose-trust (medium) (+2.0) + agent_likelihood=likely bonus (+1.5)","AI/LLM services: bedrock","CloudTrail userAgents: langchain-aws/0.2.1 Boto3/1.35.0","30d activity: 148 calls in 30d: bedrock:InvokeModel (112), s3:GetObject (36)","Permissions boundary: arn:aws:iam::111122223333:policy/sandbox-boundary","Agent signals: tag agent=\"true\" matches configured agent tag key; name \"bedrock-support-agent\" contains configured AI name token \"agent\"; name \"bedrock-support-agent\" contains configured AI name token \"bedrock\"; trust policy allows automation service principal bedrock.amazonaws.com; observed runtime activity in AI/LLM service(s): bedrock; CloudTrail userAgent matches AI framework trace(s): langchain; matched profile \"bedrock-agent\"","Findings: R1 (critical), R2 (medium), R3 (medium), R5 (medium)","Recent CloudTrail actions: bedrock:InvokeModel, s3:GetObject"]}},{"data":{"id":"id_f233991436b53589","label":"mcp-ops-agent","kind":"role","risk_tier":"critical","arn":"arn:aws:iam::111122223333:role/mcp-ops-agent","score":8.5,"agent_likelihood":"likely","owner":"\u003cnone\u003e","details":["Type: role","ARN: arn:aws:iam::111122223333:role/mcp-ops-agent","Risk score: 8.5 / 10 (raw 12.5)","Agent likelihood (heuristic): likely (100%) {ai_agent} [mcp-or-framework-agent]","Owner: \u003cnone\u003e","Why this score: 8.5/10 (raw 12.5): R2 unused-permissions (medium) (+2.0) + R3 no-owner (medium) (+2.0) + R6 privilege-escalation-path (critical) (+4.0) + R7 sensitive-service-wildcard (high) (+3.0) + agent_likelihood=likely bonus (+1.5)","AI/LLM services: bedrock","CloudTrail userAgents: anthropic-sdk-python/0.49.0 Boto3/1.35.0","30d activity: 84 calls in 30d: bedrock:InvokeModel (61), secretsmanager:GetSecretValue (23)","Agent signals: tag workload=\"mcp-agent\" contains configured agent token \"mcp\"; name \"mcp-ops-agent\" contains configured AI name token \"agent\"; name \"mcp-ops-agent\" contains configured AI name token \"mcp\"; trust policy allows automation service principal ecs-tasks.amazonaws.com; policies explicitly grant AI/LLM service permission(s): bedrock; observed runtime activity in AI/LLM service(s): bedrock; CloudTrail userAgent matches AI framework trace(s): anthropic; matched profile \"mcp-or-framework-agent\"","Findings: R2 (medium), R3 (medium), R6 (critical), R7 (high)","Recent CloudTrail actions: bedrock:InvokeModel, secretsmanager:GetSecretValue"]}},{"data":{"id":"pol_1b8ef8815852746e","label":"bedrock-invoke-scoped","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_76bc1175bb0d3933","label":"ci-read-s3","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_791414c331f6718b","label":"deploy-inline","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_88576c093ec14da8","label":"AdministratorAccess","kind":"policy","risk_tier":"critical","arn":"arn:aws:iam::aws:policy/AdministratorAccess","details":["Kind: managed","ARN: arn:aws:iam::aws:policy/AdministratorAccess","Grants wildcard admin permissions (Action:* Resource:* or AdministratorAccess)"]}},{"data":{"id":"pol_8bcf14e2acb91a7c","label":"mcp-ops-inline","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"trust_0ee79436e677e32b","label":"OIDC: token.actions.githubusercontent.com","kind":"trust","risk_tier":"high","details":["Principal type: oidc","Principal: arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com","Actions: sts:AssumeRoleWithWebIdentity"]}},{"data":{"id":"trust_74d00fc85cf4e9cd","label":"bedrock.amazonaws.com","kind":"trust","risk_tier":"neutral","details":["Principal type: service","Principal: bedrock.amazonaws.com","Actions: sts:AssumeRole"]}},{"data":{"id":"trust_d00bb3e756f87679","label":"ecs-tasks.amazonaws.com","kind":"trust","risk_tier":"neutral","details":["Principal type: service","Principal: ecs-tasks.amazonaws.com","Actions: sts:AssumeRole"]}},{"data":{"id":"trust_f6865b389aaf22ba","label":"lambda.amazonaws.com","kind":"trust","risk_tier":"neutral","details":["Principal type: service","Principal: lambda.amazonaws.com","Actions: sts:AssumeRole"]}}],"edges":[{"data":{"id":"edge_1d5b52f864c802fd","source":"trust_74d00fc85cf4e9cd","target":"id_d606600300c8adae","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_4d3e890306072d90","source":"id_6ccab03c8602cb2f","target":"pol_1b8ef8815852746e","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_5b3eb97cee2607c9","source":"id_8bbe382a8603cb02","target":"id_c354859f48df07dd","label":"key","edge_kind":"has_key","risky":true}},{"data":{"id":"edge_8bd63445e11ed834","source":"trust_f6865b389aaf22ba","target":"id_6ccab03c8602cb2f","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_95810b9c58cbecbd","source":"trust_0ee79436e677e32b","target":"id_d5e1cdd7aed23ee0","label":"assumes","edge_kind":"trusts","risky":true}},{"data":{"id":"edge_a130883dc5a82169","source":"id_d606600300c8adae","target":"boundary_f46839db3fc0d927","label":"boundary","edge_kind":"bounded_by"}},{"data":{"id":"edge_be2f7bfe8aacdf96","source":"trust_d00bb3e756f87679","target":"id_f233991436b53589","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_c33ed8808c1e56b7","source":"id_d5e1cdd7aed23ee0","target":"pol_791414c331f6718b","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_c5130e3eb543a794","source":"id_d606600300c8adae","target":"pol_88576c093ec14da8","label":"managed","edge_kind":"has_policy","risky":true}},{"data":{"id":"edge_df523a011fca2624","source":"id_8bbe382a8603cb02","target":"pol_76bc1175bb0d3933","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_e54e681f9abe33d9","source":"id_f233991436b53589","target":"pol_8bcf14e2acb91a7c","label":"inline","edge_kind":"has_policy"}}],"omitted_service_linked":1}</script>
 <script>/**
  * Copyright (c) 2016-2026, The Cytoscape Consortium.
  *

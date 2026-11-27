@@ -49,7 +49,7 @@ func sampleScanRun() *model.ScanRun {
 					TopAPIs:     []model.ActivityCount{{Name: "bedrock:InvokeModel", Count: 30}},
 				},
 				ScoreExplanation: "8.9/10 (raw 14.5): R1 critical (+4.0) + R5 critical (+4.0) + compound (+2.0)",
-				AgentReasons:           []string{"trust policy allows automation service principal bedrock.amazonaws.com", "name matches pattern"},
+				AgentReasons:     []string{"trust policy allows automation service principal bedrock.amazonaws.com", "name matches pattern"},
 				TrustPrincipals: []model.TrustPrincipal{
 					{Type: "service", Value: "bedrock.amazonaws.com", Actions: []string{"sts:AssumeRole"}},
 					{Type: "wildcard", Value: "*", Actions: []string{"sts:AssumeRole"}},
@@ -143,6 +143,7 @@ func TestWriteHTMLNoCDNAndXSSSafe(t *testing.T) {
 	// Required report sections must all be present.
 	for _, want := range []string{
 		"Review before sharing:",
+		"Single-region CloudTrail scope:",
 		"Summary",
 		"Scan Coverage &amp; Data Completeness",
 		"Top 10 Risky Identities",

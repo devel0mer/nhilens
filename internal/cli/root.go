@@ -34,6 +34,7 @@ Running nhilens with no arguments prints help only and never performs a scan.`,
 
 	root.AddCommand(
 		newScanCmd(deps),
+		newDemoCmd(),
 		newReportCmd(),
 		newDiffCmd(),
 		newExplainCmd(),

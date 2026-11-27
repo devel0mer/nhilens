@@ -63,10 +63,17 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 	if run.SuppressedFindingCount > 0 {
 		_, _ = fmt.Fprintf(w, "  Suppressed: %d finding(s) via baseline ignore file\n", run.SuppressedFindingCount)
 	}
-	if run.CloudTrailEventCount > 0 {
-		_, _ = fmt.Fprintf(w, "  CloudTrail: %s (%d events analyzed)\n", run.CloudTrailStatus, run.CloudTrailEventCount)
-	} else {
-		_, _ = fmt.Fprintf(w, "  CloudTrail: %s\n", run.CloudTrailStatus)
+	regionLabel := strings.TrimSpace(run.Region)
+	if regionLabel == "" {
+		regionLabel = "default"
+	}
+	switch {
+	case run.CloudTrailStatus == model.CloudTrailStatusDisabled:
+		_, _ = fmt.Fprintf(w, "  CloudTrail: disabled (--max-events=0; userAgent traces and R4 multi-IP skipped)\n")
+	case run.CloudTrailEventCount > 0:
+		_, _ = fmt.Fprintf(w, "  CloudTrail: %s (%d events analyzed; region %s only)\n", run.CloudTrailStatus, run.CloudTrailEventCount, regionLabel)
+	default:
+		_, _ = fmt.Fprintf(w, "  CloudTrail: %s (region %s only)\n", run.CloudTrailStatus, regionLabel)
 	}
 	if run.Coverage != nil {
 		_, _ = fmt.Fprintf(w, "  Coverage:   %s\n", formatCoverageLine(run.Coverage))
@@ -78,6 +85,7 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 
 	if len(run.Identities) == 0 {
 		_, _ = fmt.Fprintln(w, "No identities found.")
+		writeCloudTrailScopeNotice(w, run)
 		return nil
 	}
 
@@ -133,7 +141,23 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 		}
 	}
 
+	writeCloudTrailScopeNotice(w, run)
 	return nil
+}
+
+func writeCloudTrailScopeNotice(w io.Writer, run *model.ScanRun) {
+	if run == nil {
+		return
+	}
+	if run.CloudTrailStatus == model.CloudTrailStatusDisabled {
+		_, _ = fmt.Fprintln(w, "\nScope note: CloudTrail lookup was disabled (--max-events=0). Agent userAgent traces, 30d activity, and R4 multi-IP key checks were skipped.")
+		return
+	}
+	regionLabel := strings.TrimSpace(run.Region)
+	if regionLabel == "" {
+		regionLabel = "default"
+	}
+	_, _ = fmt.Fprintf(w, "\nScope note: CloudTrail signals (userAgent traces, 30d activity, R4 multi-IP keys) cover region %s only — activity in other AWS regions is not included.\n", regionLabel)
 }
 
 func formatFindingsSummary(id model.Identity) string {
