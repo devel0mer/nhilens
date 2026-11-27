@@ -48,6 +48,7 @@ archives:
       - docs/nhilens.example.yaml
       - docs/nhilens-ignore.example.yaml
       - docs/rules.md
+      - docs/usage.md
 
 checksum:
   name_template: "checksums.txt"
