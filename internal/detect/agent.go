@@ -120,6 +120,7 @@ func Classify(ident *model.Identity, parentUser *model.Identity, cfg *config.Con
 	}
 	excludedGenericAgent := false
 	seenAITokens := make(map[string]struct{})
+	var matchedAITokens []string
 	for _, ntp := range aiTokenPatterns {
 		if ntp.Re.MatchString(nameToCheck) {
 			if _, dup := seenAITokens[ntp.Token]; dup {
@@ -135,8 +136,13 @@ func Classify(ident *model.Identity, parentUser *model.Identity, cfg *config.Con
 				hasAISignal = true
 				confidence += 25
 			}
-			reasons = append(reasons, fmt.Sprintf("name %q contains configured AI name token %q", nameToCheck, ntp.Token))
+			matchedAITokens = append(matchedAITokens, fmt.Sprintf("%q", ntp.Token))
 		}
+	}
+	if len(matchedAITokens) == 1 {
+		reasons = append(reasons, fmt.Sprintf("name %q contains configured AI name token %s", nameToCheck, matchedAITokens[0]))
+	} else if len(matchedAITokens) > 1 {
+		reasons = append(reasons, fmt.Sprintf("name %q contains configured AI name tokens %s (counted once)", nameToCheck, strings.Join(matchedAITokens, ", ")))
 	}
 	if !hasName && excludedGenericAgent {
 		hasName = true
@@ -144,6 +150,7 @@ func Classify(ident *model.Identity, parentUser *model.Identity, cfg *config.Con
 		confidence += 20
 		reasons = append(reasons, fmt.Sprintf("name %q matched infrastructure exclusion %q (treated as automation, not AI agent)", nameToCheck, matchedExclusion))
 	}
+	var matchedRolePatterns []string
 	for _, re := range cfg.CompiledRolePatterns() {
 		if re.MatchString(nameToCheck) {
 			if !hasName {
@@ -151,8 +158,13 @@ func Classify(ident *model.Identity, parentUser *model.Identity, cfg *config.Con
 				hasAutoSignal = true
 				confidence += 20
 			}
-			reasons = append(reasons, fmt.Sprintf("name %q matches configured pattern %q", nameToCheck, re.String()))
+			matchedRolePatterns = append(matchedRolePatterns, fmt.Sprintf("%q", re.String()))
 		}
+	}
+	if len(matchedRolePatterns) == 1 {
+		reasons = append(reasons, fmt.Sprintf("name %q matches configured pattern %s", nameToCheck, matchedRolePatterns[0]))
+	} else if len(matchedRolePatterns) > 1 {
+		reasons = append(reasons, fmt.Sprintf("name %q matches configured patterns %s (counted once)", nameToCheck, strings.Join(matchedRolePatterns, ", ")))
 	}
 	lowerName := strings.ToLower(nameToCheck)
 	if strings.Contains(lowerName, "mcp") || strings.Contains(lowerName, "langchain") || strings.Contains(lowerName, "claude") {

@@ -71,7 +71,7 @@ func WriteMarkdown(w io.Writer, run *model.ScanRun) error {
 	}
 	_, _ = fmt.Fprintln(w)
 
-	_, _ = fmt.Fprintf(w, "## Top 10 Risky Identities\n\n")
+	_, _ = fmt.Fprintf(w, "## Top Risky Identities (%d risky of %d total)\n\n", len(data.TopRisky), s.TotalIdentities)
 	if len(data.TopRisky) == 0 {
 		_, _ = fmt.Fprintln(w, "No risky findings recorded in this scan.")
 		_, _ = fmt.Fprintln(w)

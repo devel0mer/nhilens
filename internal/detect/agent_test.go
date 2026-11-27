@@ -9,7 +9,7 @@ import (
 	"github.com/devel0mer/nhilens/internal/model"
 )
 
-func boolPtr(v bool) *bool          { return &v }
+func boolPtr(v bool) *bool           { return &v }
 func timePtr(t time.Time) *time.Time { return &t }
 
 func TestClassifyHeuristicsTable(t *testing.T) {
@@ -428,5 +428,34 @@ func TestInfrastructureAgentExclusionsPreventFalsePositives(t *testing.T) {
 	if backupAgent.WorkloadKind != WorkloadAutomation || backupAgent.AgentLikelihood != model.LikelihoodPossible || backupAgent.AgentConfidence != 45 {
 		t.Errorf("acme-backup-agent = (%q, %q, %d%%), want (automation, possible, 45%%); reasons=%v",
 			backupAgent.WorkloadKind, backupAgent.AgentLikelihood, backupAgent.AgentConfidence, backupAgent.AgentReasons)
+	}
+}
+
+func TestMultipleAINameTokensConsolidatedIntoSingleReason(t *testing.T) {
+	cfg := config.Default()
+
+	bedrockAgent := model.Identity{
+		Type: model.TypeRole,
+		Name: "bedrock-ops-agent",
+	}
+	Classify(&bedrockAgent, nil, cfg)
+	if bedrockAgent.AgentConfidence != 25 {
+		t.Fatalf("expected +25 single name-signal weight for bedrock-ops-agent, got %d%% (reasons=%v)", bedrockAgent.AgentConfidence, bedrockAgent.AgentReasons)
+	}
+	if len(bedrockAgent.AgentReasons) != 1 {
+		t.Fatalf("expected multiple AI name tokens to consolidate into 1 reason, got %d: %v", len(bedrockAgent.AgentReasons), bedrockAgent.AgentReasons)
+	}
+
+	mcpAgent := model.Identity{
+		Type: model.TypeRole,
+		Name: "mcp-ops-agent",
+	}
+	Classify(&mcpAgent, nil, cfg)
+	// +25 from single consolidated name signal + +10 from mcp-or-framework-agent profile.
+	if mcpAgent.AgentConfidence != 35 {
+		t.Fatalf("expected 35%% (25 name + 10 profile) for mcp-ops-agent, got %d%% (reasons=%v)", mcpAgent.AgentConfidence, mcpAgent.AgentReasons)
+	}
+	if len(mcpAgent.AgentReasons) != 2 {
+		t.Fatalf("expected 1 consolidated name reason + 1 profile reason, got %d: %v", len(mcpAgent.AgentReasons), mcpAgent.AgentReasons)
 	}
 }

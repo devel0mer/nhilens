@@ -113,8 +113,16 @@
   .agent-likely { color: #6d28d9; background: #f5f3ff; border: 1px solid #ddd6fe; }
   .agent-possible { color: #0369a1; background: #f0f9ff; border: 1px solid #bae6fd; }
   .agent-none { color: var(--muted); background: #f8fafc; border: 1px solid var(--border); }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12.5px; }
-  td .mono { overflow-wrap: anywhere; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
+  .arn { font-size: 11px; overflow-wrap: break-word; }
+  #risky-table { table-layout: fixed; }
+  #risky-table th:nth-child(1) { width: 7%; }
+  #risky-table th:nth-child(2) { width: 20%; }
+  #risky-table th:nth-child(3) { width: 22%; }
+  #risky-table th:nth-child(4) { width: 8%; }
+  #risky-table th:nth-child(5) { width: 22%; }
+  #risky-table th:nth-child(6) { width: 21%; }
+  #risky-table td { overflow-wrap: break-word; }
   .muted { color: var(--muted); font-size: 12.5px; }
   ul.compact { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; }
   ul.compact li { margin-bottom: 2px; }
@@ -292,7 +300,7 @@
   </div>
   {{end}}
 
-  <h2>Top 10 Risky Identities</h2>
+  <h2>Top Risky Identities <span class="muted" style="font-size:13.5px;font-weight:400;">({{len .Report.TopRisky}} risky of {{.Report.Summary.TotalIdentities}} total{{if eq (len .Report.TopRisky) 10}} &middot; top 10 shown{{end}})</span></h2>
   <div class="panel">
     {{if .Report.TopRisky}}
     <div class="graph-toolbar" id="table-filters">
@@ -323,7 +331,7 @@
         </select>
       </label>
       <button id="tbl-reset" type="button">Reset Filters</button>
-      <span class="muted" id="tbl-count">Showing {{len .Report.TopRisky}} of {{len .Report.TopRisky}}</span>
+      <span class="muted" id="tbl-count">Showing {{len .Report.TopRisky}} of {{len .Report.TopRisky}} risky</span>
     </div>
     <table id="risky-table">
       <thead>
@@ -345,7 +353,7 @@
           </td>
           <td>
             <div><strong>{{.Name}}</strong> <span class="badge sev-info">{{.Type}}</span>{{if eq .CoverageStatus "partial"}} <span class="badge sev-medium" title="Partial enrichment data">partial</span>{{end}}</div>
-            <div class="mono muted">{{.ARN}}</div>
+            <div class="mono muted arn">{{.ARN}}</div>
             {{if .DataGaps}}<div class="muted">Coverage gaps: <span class="mono">{{join .DataGaps ", "}}</span></div>{{end}}
             {{if .AIServices}}<div class="muted">AI services: <span class="mono">{{join .AIServices ", "}}</span></div>{{end}}
             {{if .PermissionsBoundaryARN}}<div class="muted">Boundary: <span class="mono">{{shortARN .PermissionsBoundaryARN}}</span></div>{{end}}
@@ -376,10 +384,19 @@
           </td>
           <td class="muted">
             <div>Last used: {{fmtTimePtr .LastUsed}}</div>
-            {{if .Activity30d}}<div><strong>30d:</strong> <span class="mono">{{fmtActivity30d .Activity30d}}</span></div>{{end}}
-            {{if .ObservedUserAgents}}<div>User-Agents: <span class="mono">{{join .ObservedUserAgents ", "}}</span></div>{{end}}
-            {{if .SourceIPs}}<div>IPs (best-effort): <span class="mono">{{join .SourceIPs ", "}}</span></div>{{end}}
-            {{if and (not .Activity30d) .RecentEventNames}}<div>Actions: <span class="mono">{{join .RecentEventNames ", "}}</span></div>{{end}}
+            {{if .Activity30d}}
+            <div style="margin-top:4px;"><strong>30d ({{.Activity30d.TotalEvents}} calls):</strong></div>
+            {{if .Activity30d.TopAPIs}}
+            <ul class="compact mono">
+              {{range .Activity30d.TopAPIs}}<li>{{.Name}} ({{.Count}})</li>{{end}}
+            </ul>
+            {{else}}
+            <div class="mono">{{fmtActivity30d .Activity30d}}</div>
+            {{end}}
+            {{end}}
+            {{if .ObservedUserAgents}}<div style="margin-top:4px;">User-Agents: <span class="mono">{{join .ObservedUserAgents ", "}}</span></div>{{end}}
+            {{if .SourceIPs}}<div style="margin-top:4px;">IPs (best-effort): <span class="mono">{{join .SourceIPs ", "}}</span></div>{{end}}
+            {{if and (not .Activity30d) .RecentEventNames}}<div style="margin-top:4px;">Actions: <span class="mono">{{join .RecentEventNames ", "}}</span></div>{{end}}
           </td>
         </tr>
         {{end}}
@@ -708,7 +725,7 @@
         if (show) { visible++; }
       });
       if (countEl) {
-        countEl.textContent = "Showing " + visible + " of " + rows.length;
+        countEl.textContent = "Showing " + visible + " of " + rows.length + " risky";
       }
     }
 

@@ -146,7 +146,7 @@ func TestWriteHTMLNoCDNAndXSSSafe(t *testing.T) {
 		"Single-region CloudTrail scope:",
 		"Summary",
 		"Scan Coverage &amp; Data Completeness",
-		"Top 10 Risky Identities",
+		"Top Risky Identities",
 		"Findings by Rule",
 		"Identity, Trust &amp; Policy Relationship Graph",
 		"Limitations &amp; Methodology",

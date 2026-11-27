@@ -81,7 +81,7 @@ brews:
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     skip_upload: "{{ if .Env.TAP_GITHUB_TOKEN }}false{{ else }}true{{ end }}"
     homepage: https://github.com/devel0mer/nhilens
-    description: "Strictly read-only Go CLI to audit AWS non-human identities (NHI) and AI agents"
+    description: "Which AI agents and non-human identities are running in your AWS account — strictly read-only Go CLI"
     license: Apache-2.0
     test: |
       assert_match "nhilens #{version}", shell_output("#{bin}/nhilens version")
@@ -97,7 +97,7 @@ scoops:
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     skip_upload: "{{ if .Env.TAP_GITHUB_TOKEN }}false{{ else }}true{{ end }}"
     homepage: https://github.com/devel0mer/nhilens
-    description: "Strictly read-only Go CLI to audit AWS non-human identities (NHI) and AI agents"
+    description: "Which AI agents and non-human identities are running in your AWS account — strictly read-only Go CLI"
     license: Apache-2.0
 
 snapshot:

@@ -113,8 +113,16 @@
   .agent-likely { color: #6d28d9; background: #f5f3ff; border: 1px solid #ddd6fe; }
   .agent-possible { color: #0369a1; background: #f0f9ff; border: 1px solid #bae6fd; }
   .agent-none { color: var(--muted); background: #f8fafc; border: 1px solid var(--border); }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12.5px; }
-  td .mono { overflow-wrap: anywhere; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
+  .arn { font-size: 11px; overflow-wrap: break-word; }
+  #risky-table { table-layout: fixed; }
+  #risky-table th:nth-child(1) { width: 7%; }
+  #risky-table th:nth-child(2) { width: 20%; }
+  #risky-table th:nth-child(3) { width: 22%; }
+  #risky-table th:nth-child(4) { width: 8%; }
+  #risky-table th:nth-child(5) { width: 22%; }
+  #risky-table th:nth-child(6) { width: 21%; }
+  #risky-table td { overflow-wrap: break-word; }
   .muted { color: var(--muted); font-size: 12.5px; }
   ul.compact { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; }
   ul.compact li { margin-bottom: 2px; }
@@ -243,22 +251,22 @@
   <div class="cards">
     <div class="card">
       <div class="label">Total Identities</div>
-      <div class="value">7</div>
-      <div class="sub">5 roles &middot; 1 users &middot; 1 keys (1 service-linked)</div>
+      <div class="value">12</div>
+      <div class="sub">9 roles &middot; 2 users &middot; 1 keys (1 service-linked)</div>
     </div>
     <div class="card">
       <div class="label">Heuristic AI / Automation</div>
-      <div class="value">3 <span style="font-size:14px;font-weight:500;">likely</span></div>
-      <div class="sub">3 possible (heuristic signals only)</div>
+      <div class="value">4 <span style="font-size:14px;font-weight:500;">likely</span></div>
+      <div class="sub">6 possible (heuristic signals only)</div>
     </div>
     <div class="card">
       <div class="label">Total Findings</div>
-      <div class="value">10</div>
-      <div class="sub">2 critical &middot; 3 high &middot; 5 medium &middot; 0 low</div>
+      <div class="value">14</div>
+      <div class="sub">2 critical &middot; 4 high &middot; 8 medium &middot; 0 low</div>
     </div>
     <div class="card">
       <div class="label">Unowned Non-Human</div>
-      <div class="value">2</div>
+      <div class="value">4</div>
       <div class="sub">Roles/users without configured owner tag</div>
     </div>
     <div class="card">
@@ -277,7 +285,7 @@
 
   
 
-  <h2>Top 10 Risky Identities</h2>
+  <h2>Top Risky Identities <span class="muted" style="font-size:13.5px;font-weight:400;">(6 risky of 12 total)</span></h2>
   <div class="panel">
     
     <div class="graph-toolbar" id="table-filters">
@@ -308,7 +316,7 @@
         </select>
       </label>
       <button id="tbl-reset" type="button">Reset Filters</button>
-      <span class="muted" id="tbl-count">Showing 4 of 4</span>
+      <span class="muted" id="tbl-count">Showing 6 of 6 risky</span>
     </div>
     <table id="risky-table">
       <thead>
@@ -330,7 +338,7 @@
           </td>
           <td>
             <div><strong>mcp-ops-agent</strong> <span class="badge sev-info">role</span></div>
-            <div class="mono muted">arn:aws:iam::111122223333:role/mcp-ops-agent</div>
+            <div class="mono muted arn">arn:aws:iam::111122223333:role/mcp-ops-agent</div>
             
             <div class="muted">AI services: <span class="mono">bedrock</span></div>
             
@@ -341,7 +349,7 @@
             <span class="badge sev-info">mcp-or-framework-agent</span>
             
             <ul class="compact">
-              <li>tag workload=&#34;mcp-agent&#34; contains configured agent token &#34;mcp&#34;</li><li>name &#34;mcp-ops-agent&#34; contains configured AI name token &#34;agent&#34;</li><li>name &#34;mcp-ops-agent&#34; contains configured AI name token &#34;mcp&#34;</li><li>trust policy allows automation service principal ecs-tasks.amazonaws.com</li><li>policies explicitly grant AI/LLM service permission(s): bedrock</li><li>observed runtime activity in AI/LLM service(s): bedrock</li><li>CloudTrail userAgent matches AI framework trace(s): anthropic</li><li>matched profile &#34;mcp-or-framework-agent&#34;</li>
+              <li>tag workload=&#34;mcp-agent&#34; contains configured agent token &#34;mcp&#34;</li><li>name &#34;mcp-ops-agent&#34; contains configured AI name tokens &#34;agent&#34;, &#34;mcp&#34; (counted once)</li><li>trust policy allows automation service principal ecs-tasks.amazonaws.com</li><li>policies explicitly grant AI/LLM service permission(s): bedrock</li><li>observed runtime activity in AI/LLM service(s): bedrock</li><li>CloudTrail userAgent matches AI framework trace(s): anthropic</li><li>matched profile &#34;mcp-or-framework-agent&#34;</li>
             </ul>
             
           </td>
@@ -367,8 +375,15 @@
           </td>
           <td class="muted">
             <div>Last used: 2026-11-23</div>
-            <div><strong>30d:</strong> <span class="mono">84 calls in 30d: bedrock:InvokeModel (61), secretsmanager:GetSecretValue (23)</span></div>
-            <div>User-Agents: <span class="mono">anthropic-sdk-python/0.49.0 Boto3/1.35.0</span></div>
+            
+            <div style="margin-top:4px;"><strong>30d (84 calls):</strong></div>
+            
+            <ul class="compact mono">
+              <li>bedrock:InvokeModel (61)</li><li>secretsmanager:GetSecretValue (23)</li>
+            </ul>
+            
+            
+            <div style="margin-top:4px;">User-Agents: <span class="mono">anthropic-sdk-python/0.49.0 Boto3/1.35.0</span></div>
             
             
           </td>
@@ -381,7 +396,7 @@
           </td>
           <td>
             <div><strong>bedrock-support-agent</strong> <span class="badge sev-info">role</span></div>
-            <div class="mono muted">arn:aws:iam::111122223333:role/bedrock-support-agent</div>
+            <div class="mono muted arn">arn:aws:iam::111122223333:role/bedrock-support-agent</div>
             
             <div class="muted">AI services: <span class="mono">bedrock</span></div>
             <div class="muted">Boundary: <span class="mono">sandbox-boundary</span></div>
@@ -392,7 +407,7 @@
             <span class="badge sev-info">bedrock-agent</span>
             
             <ul class="compact">
-              <li>tag agent=&#34;true&#34; matches configured agent tag key</li><li>name &#34;bedrock-support-agent&#34; contains configured AI name token &#34;agent&#34;</li><li>name &#34;bedrock-support-agent&#34; contains configured AI name token &#34;bedrock&#34;</li><li>trust policy allows automation service principal bedrock.amazonaws.com</li><li>observed runtime activity in AI/LLM service(s): bedrock</li><li>CloudTrail userAgent matches AI framework trace(s): langchain</li><li>matched profile &#34;bedrock-agent&#34;</li>
+              <li>tag agent=&#34;true&#34; matches configured agent tag key</li><li>name &#34;bedrock-support-agent&#34; contains configured AI name tokens &#34;agent&#34;, &#34;bedrock&#34; (counted once)</li><li>trust policy allows automation service principal bedrock.amazonaws.com</li><li>observed runtime activity in AI/LLM service(s): bedrock</li><li>CloudTrail userAgent matches AI framework trace(s): langchain</li><li>matched profile &#34;bedrock-agent&#34;</li>
             </ul>
             
           </td>
@@ -418,10 +433,66 @@
           </td>
           <td class="muted">
             <div>Last used: 2026-11-23</div>
-            <div><strong>30d:</strong> <span class="mono">148 calls in 30d: bedrock:InvokeModel (112), s3:GetObject (36)</span></div>
-            <div>User-Agents: <span class="mono">langchain-aws/0.2.1 Boto3/1.35.0</span></div>
+            
+            <div style="margin-top:4px;"><strong>30d (148 calls):</strong></div>
+            
+            <ul class="compact mono">
+              <li>bedrock:InvokeModel (112)</li><li>s3:GetObject (36)</li>
+            </ul>
             
             
+            <div style="margin-top:4px;">User-Agents: <span class="mono">langchain-aws/0.2.1 Boto3/1.35.0</span></div>
+            
+            
+          </td>
+        </tr>
+        
+        <tr class="risky-row" data-type="role" data-agent="likely" data-sev="high">
+          <td>
+            <span class="badge sev-critical">7.3 / 10</span>
+            <div class="muted mono" style="margin-top:4px;">raw 8.5</div>
+          </td>
+          <td>
+            <div><strong>sagemaker-eval-runner</strong> <span class="badge sev-info">role</span></div>
+            <div class="mono muted arn">arn:aws:iam::111122223333:role/sagemaker-eval-runner</div>
+            
+            <div class="muted">AI services: <span class="mono">sagemaker</span></div>
+            
+          </td>
+          <td>
+            <span class="badge agent-likely">likely (100%)</span>
+            <span class="badge sev-info">ai_agent</span>
+            
+            
+            <ul class="compact">
+              <li>name &#34;sagemaker-eval-runner&#34; matches configured pattern &#34;(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)&#34;</li><li>trust policy allows automation service principal sagemaker.amazonaws.com</li><li>policies explicitly grant AI/LLM service permission(s): sagemaker</li><li>observed runtime activity in AI/LLM service(s): sagemaker</li>
+            </ul>
+            
+          </td>
+          <td class="mono">&lt;none&gt;</td>
+          <td>
+            
+              <span class="badge sev-medium">R3 no-owner</span>
+            
+              <span class="badge sev-medium">R5 loose-trust</span>
+            
+              <span class="badge sev-high">R7 sensitive-service-wildcard</span>
+            
+            
+            <div class="muted" style="margin-top:6px;"><strong>Why 7.3/10?</strong> 7.3/10 (raw 8.5): R3 no-owner (medium) (&#43;2.0) &#43; R5 loose-trust (medium) (&#43;2.0) &#43; R7 sensitive-service-wildcard (high) (&#43;3.0) &#43; agent_likelihood=likely bonus (&#43;1.5)</div>
+            
+            
+            <ul class="compact muted">
+              <li>R3 no-owner (medium): +2.0</li><li>R5 loose-trust (medium): +2.0</li><li>R7 sensitive-service-wildcard (high): +3.0</li><li>agent_likelihood=likely bonus: +1.5</li>
+            </ul>
+            
+          </td>
+          <td class="muted">
+            <div>Last used: 2026-11-23</div>
+            
+            
+            
+            <div style="margin-top:4px;">Actions: <span class="mono">sagemaker:InvokeEndpoint</span></div>
           </td>
         </tr>
         
@@ -432,7 +503,7 @@
           </td>
           <td>
             <div><strong>AKIAEXAMPLE111111111</strong> <span class="badge sev-info">key</span></div>
-            <div class="mono muted">arn:aws:iam::111122223333:user/ci-bot-user</div>
+            <div class="mono muted arn">arn:aws:iam::111122223333:user/ci-bot-user</div>
             
             
             
@@ -465,8 +536,8 @@
             <div>Last used: 2026-11-23</div>
             
             
-            <div>IPs (best-effort): <span class="mono">198.51.100.14, 203.0.113.88</span></div>
-            <div>Actions: <span class="mono">s3:ListBuckets, sts:GetCallerIdentity</span></div>
+            <div style="margin-top:4px;">IPs (best-effort): <span class="mono">198.51.100.14, 203.0.113.88</span></div>
+            <div style="margin-top:4px;">Actions: <span class="mono">s3:ListBuckets, sts:GetCallerIdentity</span></div>
           </td>
         </tr>
         
@@ -477,7 +548,7 @@
           </td>
           <td>
             <div><strong>gh-wildcard-deploy</strong> <span class="badge sev-info">role</span></div>
-            <div class="mono muted">arn:aws:iam::111122223333:role/gh-wildcard-deploy</div>
+            <div class="mono muted arn">arn:aws:iam::111122223333:role/gh-wildcard-deploy</div>
             
             
             
@@ -511,7 +582,52 @@
             
             
             
-            <div>Actions: <span class="mono">sts:AssumeRoleWithWebIdentity, s3:PutObject</span></div>
+            <div style="margin-top:4px;">Actions: <span class="mono">sts:AssumeRoleWithWebIdentity, s3:PutObject</span></div>
+          </td>
+        </tr>
+        
+        <tr class="risky-row" data-type="role" data-agent="possible" data-sev="medium">
+          <td>
+            <span class="badge sev-medium">2.6 / 10</span>
+            <div class="muted mono" style="margin-top:4px;">raw 2.0</div>
+          </td>
+          <td>
+            <div><strong>legacy-etl-worker</strong> <span class="badge sev-info">role</span></div>
+            <div class="mono muted arn">arn:aws:iam::111122223333:role/legacy-etl-worker</div>
+            
+            
+            
+          </td>
+          <td>
+            <span class="badge agent-possible">possible (45%)</span>
+            <span class="badge sev-info">automation</span>
+            
+            
+            <ul class="compact">
+              <li>name &#34;legacy-etl-worker&#34; matches configured pattern &#34;(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)&#34;</li><li>trust policy allows automation service principal lambda.amazonaws.com</li>
+            </ul>
+            
+          </td>
+          <td class="mono">&lt;none&gt;</td>
+          <td>
+            
+              <span class="badge sev-medium">R3 no-owner</span>
+            
+            
+            <div class="muted" style="margin-top:6px;"><strong>Why 2.6/10?</strong> 2.6/10 (raw 2.0): R3 no-owner (medium) (&#43;2.0)</div>
+            
+            
+            <ul class="compact muted">
+              <li>R3 no-owner (medium): +2.0</li>
+            </ul>
+            
+          </td>
+          <td class="muted">
+            <div>Last used: 2026-11-23</div>
+            
+            
+            
+            
           </td>
         </tr>
         
@@ -543,13 +659,13 @@
         </tr>
         <tr>
           <th>IAM Login Profiles</th>
-          <td>1 checked, 0 failed</td>
+          <td>2 checked, 0 failed</td>
         </tr>
         <tr>
           <th>Access Advisor (R2)</th>
           <td>
             
-              5 / 5 succeeded (0 failed; 1 excluded SLR, 0 zero-policy skipped)
+              8 / 8 succeeded (0 failed; 1 excluded SLR, 0 zero-policy skipped)
             
           </td>
         </tr>
@@ -681,13 +797,13 @@
       <div>
         <strong>R3 &mdash; no-owner</strong>
         <span class="badge sev-medium">
-          2 finding(s) &middot; medium
+          4 finding(s) &middot; medium
         </span>
       </div>
     </div>
     <div class="rule-body">
       <div class="muted">No configured owner or sponsor tag was found on this non-human identity, making incident response, periodic access reviews, and AI agent lifecycle governance difficult.</div>
-      <div class="remediation"><strong>Remediation hint:</strong> Tag this IAM role with an accountable owner or team (e.g., aws iam tag-role --role-name bedrock-support-agent --tags Key=owner,Value=&lt;team-or-email&gt;).</div>
+      <div class="remediation"><strong>Remediation hint:</strong> Tag this IAM role with an accountable owner or team (e.g., aws iam tag-role --role-name legacy-etl-worker --tags Key=owner,Value=&lt;team-or-email&gt;).</div>
       
       <table>
         <thead>
@@ -727,6 +843,36 @@
             <td>
               <ul class="compact">
                 <li>none of the configured owner tag keys matched: owner, sponsor, team, maintainer, created-by</li><li>existing tag keys: agent, env</li>
+              </ul>
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>sagemaker-eval-runner</strong> <span class="badge sev-info">role</span>
+              <div class="mono muted">arn:aws:iam::111122223333:role/sagemaker-eval-runner</div>
+            </td>
+            <td><span class="badge sev-medium">medium</span></td>
+            <td><span class="badge agent-likely">likely</span></td>
+            <td><span class="badge sev-critical">7.3/10</span></td>
+            <td>
+              <ul class="compact">
+                <li>none of the configured owner tag keys matched: owner, sponsor, team, maintainer, created-by</li><li>existing tag keys: env</li>
+              </ul>
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>legacy-etl-worker</strong> <span class="badge sev-info">role</span>
+              <div class="mono muted">arn:aws:iam::111122223333:role/legacy-etl-worker</div>
+            </td>
+            <td><span class="badge sev-medium">medium</span></td>
+            <td><span class="badge agent-possible">possible</span></td>
+            <td><span class="badge sev-medium">2.6/10</span></td>
+            <td>
+              <ul class="compact">
+                <li>none of the configured owner tag keys matched: owner, sponsor, team, maintainer, created-by</li><li>existing tag keys: env</li>
               </ul>
             </td>
           </tr>
@@ -788,7 +934,7 @@
       <div>
         <strong>R5 &mdash; loose-trust</strong>
         <span class="badge sev-high">
-          2 finding(s) &middot; high
+          3 finding(s) &middot; high
         </span>
       </div>
     </div>
@@ -819,6 +965,21 @@
             <td>
               <ul class="compact">
                 <li>service principal trust (bedrock.amazonaws.com) lacks aws:SourceArn, aws:SourceAccount, or aws:SourceOrgID condition (cross-service confused-deputy risk)</li>
+              </ul>
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>sagemaker-eval-runner</strong> <span class="badge sev-info">role</span>
+              <div class="mono muted">arn:aws:iam::111122223333:role/sagemaker-eval-runner</div>
+            </td>
+            <td><span class="badge sev-medium">medium</span></td>
+            <td><span class="badge agent-likely">likely</span></td>
+            <td><span class="badge sev-critical">7.3/10</span></td>
+            <td>
+              <ul class="compact">
+                <li>service principal trust (sagemaker.amazonaws.com) lacks aws:SourceArn, aws:SourceAccount, or aws:SourceOrgID condition (cross-service confused-deputy risk)</li>
               </ul>
             </td>
           </tr>
@@ -879,7 +1040,7 @@
             <td><span class="badge sev-critical">8.5/10</span></td>
             <td>
               <ul class="compact">
-                <li>inline policy &#34;mcp-ops-inline&#34; allows effective iam:PassRole on Resource:* without iam:PassedToService combined with compute/AI launch action(s) [lambda:createfunction] (PassRole privilege-escalation path; reachable privileged target role(s): bedrock-support-agent (admin wildcard))</li>
+                <li>inline policy &#34;mcp-ops-inline&#34; allows effective iam:PassRole on Resource:* without iam:PassedToService combined with compute/AI launch action(s) [lambda:createfunction] (PassRole privilege-escalation path; reachable privileged target role(s): bedrock-support-agent (admin wildcard), sagemaker-eval-runner (broad secrets/KMS/AI permissions))</li>
               </ul>
             </td>
           </tr>
@@ -895,7 +1056,7 @@
       <div>
         <strong>R7 &mdash; sensitive-service-wildcard</strong>
         <span class="badge sev-high">
-          1 finding(s) &middot; high
+          2 finding(s) &middot; high
         </span>
       </div>
     </div>
@@ -926,6 +1087,21 @@
             <td>
               <ul class="compact">
                 <li>inline policy &#34;mcp-ops-inline&#34; grants unconditioned broad access to [secretsmanager:GetSecretValue on Resource:*]</li>
+              </ul>
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>sagemaker-eval-runner</strong> <span class="badge sev-info">role</span>
+              <div class="mono muted">arn:aws:iam::111122223333:role/sagemaker-eval-runner</div>
+            </td>
+            <td><span class="badge sev-high">high</span></td>
+            <td><span class="badge agent-likely">likely</span></td>
+            <td><span class="badge sev-critical">7.3/10</span></td>
+            <td>
+              <ul class="compact">
+                <li>inline policy &#34;sagemaker-eval-broad&#34; grants unconditioned broad access to [secretsmanager:* (all Secrets Manager operations)]</li>
               </ul>
             </td>
           </tr>
@@ -969,7 +1145,7 @@
       <label><input type="checkbox" class="kind-toggle" value="boundary" checked> Boundaries</label>
       <button id="graph-reset" type="button">Reset View</button>
       <span class="muted">
-        16 nodes, 11 edges
+        26 nodes, 19 edges
         (1 unflagged AWS service-linked roles omitted)
       </span>
     </div>
@@ -1023,11 +1199,11 @@
 
   <footer>
     <span>Generated by nhilens 0.0.0-dev (commit: none, built: unknown) (strictly read-only AWS audit)</span>
-    <span>Generated 2026-11-27 10:43:48 UTC</span>
+    <span>Generated 2026-11-27 12:39:16 UTC</span>
   </footer>
 </main>
 
-<script id="nhilens-graph-data" type="application/json">{"nodes":[{"data":{"id":"boundary_f46839db3fc0d927","label":"Boundary: sandbox-boundary","kind":"boundary","risk_tier":"neutral","arn":"arn:aws:iam::111122223333:policy/sandbox-boundary","details":["Attached IAM Permissions Boundary","ARN: arn:aws:iam::111122223333:policy/sandbox-boundary","Note: nhilens intersects boundaries at the action level across R1, R6, and R7; resource and session policies are not evaluated."]}},{"data":{"id":"id_6ccab03c8602cb2f","label":"lambda-doc-summarizer-agent","kind":"role","risk_tier":"clean","arn":"arn:aws:iam::111122223333:role/lambda-doc-summarizer-agent","agent_likelihood":"likely","owner":"ai-platform","details":["Type: role","ARN: arn:aws:iam::111122223333:role/lambda-doc-summarizer-agent","Risk score: 0.0 / 10 (raw 0.0)","Agent likelihood (heuristic): likely (100%) {ai_agent} [lambda-ai-invoker]","Owner: ai-platform","AI/LLM services: bedrock","Agent signals: tag agent=\"true\" matches configured agent tag key; tag owner=\"ai-platform\" contains configured agent token \"ai\"; name \"lambda-doc-summarizer-agent\" contains configured AI name token \"agent\"; trust policy allows automation service principal lambda.amazonaws.com; policies explicitly grant AI/LLM service permission(s): bedrock; observed runtime activity in AI/LLM service(s): bedrock; matched profile \"lambda-ai-invoker\""]}},{"data":{"id":"id_8bbe382a8603cb02","label":"ci-bot-user","kind":"user","risk_tier":"clean","arn":"arn:aws:iam::111122223333:user/ci-bot-user","agent_likelihood":"possible","owner":"platform-team","details":["Type: user","ARN: arn:aws:iam::111122223333:user/ci-bot-user","Risk score: 0.0 / 10 (raw 0.0)","Agent likelihood (heuristic): possible (45%) {automation} [programmatic-key-bot]","Owner: platform-team","Agent signals: name \"ci-bot-user\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; IAM user has 1 access key(s) and no console login profile (automation signal); matched profile \"programmatic-key-bot\""]}},{"data":{"id":"id_c354859f48df07dd","label":"AKIAEXAMPLE111111111\n(ci-bot-user)","kind":"key","risk_tier":"medium","arn":"arn:aws:iam::111122223333:user/ci-bot-user","score":3.7,"agent_likelihood":"possible","owner":"platform-team","details":["Type: key","ARN: arn:aws:iam::111122223333:user/ci-bot-user","Risk score: 3.7 / 10 (raw 3.0)","Agent likelihood (heuristic): possible (45%) {automation} [programmatic-key-bot]","Owner: platform-team","Why this score: 3.7/10 (raw 3.0): R4 stale-or-shared-key (high) (+3.0)","Agent signals: name \"ci-bot-user\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; access key belongs to programmatic IAM user \"ci-bot-user\" with no console login profile (automation signal); matched profile \"programmatic-key-bot\"","Findings: R4 (high)","Observed IPs (best-effort): 198.51.100.14, 203.0.113.88","Recent CloudTrail actions: s3:ListBuckets, sts:GetCallerIdentity"]}},{"data":{"id":"id_d5e1cdd7aed23ee0","label":"gh-wildcard-deploy","kind":"role","risk_tier":"medium","arn":"arn:aws:iam::111122223333:role/gh-wildcard-deploy","score":3.7,"agent_likelihood":"possible","owner":"devops-team","details":["Type: role","ARN: arn:aws:iam::111122223333:role/gh-wildcard-deploy","Risk score: 3.7 / 10 (raw 3.0)","Agent likelihood (heuristic): possible (45%) {automation} [ci-oidc-automation]","Owner: devops-team","Why this score: 3.7/10 (raw 3.0): R5 loose-trust (high) (+3.0)","Agent signals: name \"gh-wildcard-deploy\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; trust policy federates with OIDC/workload provider matching \"token.actions.githubusercontent.com\" (arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com); matched profile \"ci-oidc-automation\"","Findings: R5 (high)","Recent CloudTrail actions: sts:AssumeRoleWithWebIdentity, s3:PutObject"]}},{"data":{"id":"id_d606600300c8adae","label":"bedrock-support-agent","kind":"role","risk_tier":"critical","arn":"arn:aws:iam::111122223333:role/bedrock-support-agent","score":8.3,"agent_likelihood":"likely","owner":"\u003cnone\u003e","details":["Type: role","ARN: arn:aws:iam::111122223333:role/bedrock-support-agent","Risk score: 8.3 / 10 (raw 11.5)","Agent likelihood (heuristic): likely (100%) {ai_agent} [bedrock-agent]","Owner: \u003cnone\u003e","Why this score: 8.3/10 (raw 11.5): R1 wildcard-permissions (critical) (+4.0) + R2 unused-permissions (medium) (+2.0) + R3 no-owner (medium) (+2.0) + R5 loose-trust (medium) (+2.0) + agent_likelihood=likely bonus (+1.5)","AI/LLM services: bedrock","CloudTrail userAgents: langchain-aws/0.2.1 Boto3/1.35.0","30d activity: 148 calls in 30d: bedrock:InvokeModel (112), s3:GetObject (36)","Permissions boundary: arn:aws:iam::111122223333:policy/sandbox-boundary","Agent signals: tag agent=\"true\" matches configured agent tag key; name \"bedrock-support-agent\" contains configured AI name token \"agent\"; name \"bedrock-support-agent\" contains configured AI name token \"bedrock\"; trust policy allows automation service principal bedrock.amazonaws.com; observed runtime activity in AI/LLM service(s): bedrock; CloudTrail userAgent matches AI framework trace(s): langchain; matched profile \"bedrock-agent\"","Findings: R1 (critical), R2 (medium), R3 (medium), R5 (medium)","Recent CloudTrail actions: bedrock:InvokeModel, s3:GetObject"]}},{"data":{"id":"id_f233991436b53589","label":"mcp-ops-agent","kind":"role","risk_tier":"critical","arn":"arn:aws:iam::111122223333:role/mcp-ops-agent","score":8.5,"agent_likelihood":"likely","owner":"\u003cnone\u003e","details":["Type: role","ARN: arn:aws:iam::111122223333:role/mcp-ops-agent","Risk score: 8.5 / 10 (raw 12.5)","Agent likelihood (heuristic): likely (100%) {ai_agent} [mcp-or-framework-agent]","Owner: \u003cnone\u003e","Why this score: 8.5/10 (raw 12.5): R2 unused-permissions (medium) (+2.0) + R3 no-owner (medium) (+2.0) + R6 privilege-escalation-path (critical) (+4.0) + R7 sensitive-service-wildcard (high) (+3.0) + agent_likelihood=likely bonus (+1.5)","AI/LLM services: bedrock","CloudTrail userAgents: anthropic-sdk-python/0.49.0 Boto3/1.35.0","30d activity: 84 calls in 30d: bedrock:InvokeModel (61), secretsmanager:GetSecretValue (23)","Agent signals: tag workload=\"mcp-agent\" contains configured agent token \"mcp\"; name \"mcp-ops-agent\" contains configured AI name token \"agent\"; name \"mcp-ops-agent\" contains configured AI name token \"mcp\"; trust policy allows automation service principal ecs-tasks.amazonaws.com; policies explicitly grant AI/LLM service permission(s): bedrock; observed runtime activity in AI/LLM service(s): bedrock; CloudTrail userAgent matches AI framework trace(s): anthropic; matched profile \"mcp-or-framework-agent\"","Findings: R2 (medium), R3 (medium), R6 (critical), R7 (high)","Recent CloudTrail actions: bedrock:InvokeModel, secretsmanager:GetSecretValue"]}},{"data":{"id":"pol_1b8ef8815852746e","label":"bedrock-invoke-scoped","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_76bc1175bb0d3933","label":"ci-read-s3","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_791414c331f6718b","label":"deploy-inline","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_88576c093ec14da8","label":"AdministratorAccess","kind":"policy","risk_tier":"critical","arn":"arn:aws:iam::aws:policy/AdministratorAccess","details":["Kind: managed","ARN: arn:aws:iam::aws:policy/AdministratorAccess","Grants wildcard admin permissions (Action:* Resource:* or AdministratorAccess)"]}},{"data":{"id":"pol_8bcf14e2acb91a7c","label":"mcp-ops-inline","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"trust_0ee79436e677e32b","label":"OIDC: token.actions.githubusercontent.com","kind":"trust","risk_tier":"high","details":["Principal type: oidc","Principal: arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com","Actions: sts:AssumeRoleWithWebIdentity"]}},{"data":{"id":"trust_74d00fc85cf4e9cd","label":"bedrock.amazonaws.com","kind":"trust","risk_tier":"neutral","details":["Principal type: service","Principal: bedrock.amazonaws.com","Actions: sts:AssumeRole"]}},{"data":{"id":"trust_d00bb3e756f87679","label":"ecs-tasks.amazonaws.com","kind":"trust","risk_tier":"neutral","details":["Principal type: service","Principal: ecs-tasks.amazonaws.com","Actions: sts:AssumeRole"]}},{"data":{"id":"trust_f6865b389aaf22ba","label":"lambda.amazonaws.com","kind":"trust","risk_tier":"neutral","details":["Principal type: service","Principal: lambda.amazonaws.com","Actions: sts:AssumeRole"]}}],"edges":[{"data":{"id":"edge_1d5b52f864c802fd","source":"trust_74d00fc85cf4e9cd","target":"id_d606600300c8adae","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_4d3e890306072d90","source":"id_6ccab03c8602cb2f","target":"pol_1b8ef8815852746e","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_5b3eb97cee2607c9","source":"id_8bbe382a8603cb02","target":"id_c354859f48df07dd","label":"key","edge_kind":"has_key","risky":true}},{"data":{"id":"edge_8bd63445e11ed834","source":"trust_f6865b389aaf22ba","target":"id_6ccab03c8602cb2f","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_95810b9c58cbecbd","source":"trust_0ee79436e677e32b","target":"id_d5e1cdd7aed23ee0","label":"assumes","edge_kind":"trusts","risky":true}},{"data":{"id":"edge_a130883dc5a82169","source":"id_d606600300c8adae","target":"boundary_f46839db3fc0d927","label":"boundary","edge_kind":"bounded_by"}},{"data":{"id":"edge_be2f7bfe8aacdf96","source":"trust_d00bb3e756f87679","target":"id_f233991436b53589","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_c33ed8808c1e56b7","source":"id_d5e1cdd7aed23ee0","target":"pol_791414c331f6718b","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_c5130e3eb543a794","source":"id_d606600300c8adae","target":"pol_88576c093ec14da8","label":"managed","edge_kind":"has_policy","risky":true}},{"data":{"id":"edge_df523a011fca2624","source":"id_8bbe382a8603cb02","target":"pol_76bc1175bb0d3933","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_e54e681f9abe33d9","source":"id_f233991436b53589","target":"pol_8bcf14e2acb91a7c","label":"inline","edge_kind":"has_policy"}}],"omitted_service_linked":1}</script>
+<script id="nhilens-graph-data" type="application/json">{"nodes":[{"data":{"id":"boundary_f46839db3fc0d927","label":"Boundary: sandbox-boundary","kind":"boundary","risk_tier":"neutral","arn":"arn:aws:iam::111122223333:policy/sandbox-boundary","details":["Attached IAM Permissions Boundary","ARN: arn:aws:iam::111122223333:policy/sandbox-boundary","Note: nhilens intersects boundaries at the action level across R1, R6, and R7; resource and session policies are not evaluated."]}},{"data":{"id":"id_1b31f0eb4053d809","label":"legacy-etl-worker","kind":"role","risk_tier":"medium","arn":"arn:aws:iam::111122223333:role/legacy-etl-worker","score":2.6,"agent_likelihood":"possible","owner":"\u003cnone\u003e","details":["Type: role","ARN: arn:aws:iam::111122223333:role/legacy-etl-worker","Risk score: 2.6 / 10 (raw 2.0)","Agent likelihood (heuristic): possible (45%) {automation}","Owner: \u003cnone\u003e","Why this score: 2.6/10 (raw 2.0): R3 no-owner (medium) (+2.0)","Agent signals: name \"legacy-etl-worker\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; trust policy allows automation service principal lambda.amazonaws.com","Findings: R3 (medium)"]}},{"data":{"id":"id_48529fa2380ef91e","label":"ecs-billing-api","kind":"role","risk_tier":"clean","arn":"arn:aws:iam::111122223333:role/ecs-billing-api","agent_likelihood":"possible","owner":"payments-team","details":["Type: role","ARN: arn:aws:iam::111122223333:role/ecs-billing-api","Risk score: 0.0 / 10 (raw 0.0)","Agent likelihood (heuristic): possible (25%) {automation}","Owner: payments-team","Agent signals: trust policy allows automation service principal ecs-tasks.amazonaws.com"]}},{"data":{"id":"id_5942f5f7fa3f49e1","label":"terraform-plan-reader","kind":"role","risk_tier":"clean","arn":"arn:aws:iam::111122223333:role/terraform-plan-reader","agent_likelihood":"possible","owner":"infra-team","details":["Type: role","ARN: arn:aws:iam::111122223333:role/terraform-plan-reader","Risk score: 0.0 / 10 (raw 0.0)","Agent likelihood (heuristic): possible (25%) {automation}","Owner: infra-team","Agent signals: trust policy federates with OIDC/workload provider matching \"token.actions.githubusercontent.com\" (arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com)"]}},{"data":{"id":"id_6ccab03c8602cb2f","label":"lambda-doc-summarizer-agent","kind":"role","risk_tier":"clean","arn":"arn:aws:iam::111122223333:role/lambda-doc-summarizer-agent","agent_likelihood":"likely","owner":"ai-platform","details":["Type: role","ARN: arn:aws:iam::111122223333:role/lambda-doc-summarizer-agent","Risk score: 0.0 / 10 (raw 0.0)","Agent likelihood (heuristic): likely (100%) {ai_agent} [lambda-ai-invoker]","Owner: ai-platform","AI/LLM services: bedrock","Agent signals: tag agent=\"true\" matches configured agent tag key; tag owner=\"ai-platform\" contains configured agent token \"ai\"; name \"lambda-doc-summarizer-agent\" contains configured AI name token \"agent\"; trust policy allows automation service principal lambda.amazonaws.com; policies explicitly grant AI/LLM service permission(s): bedrock; observed runtime activity in AI/LLM service(s): bedrock; matched profile \"lambda-ai-invoker\""]}},{"data":{"id":"id_8bbe382a8603cb02","label":"ci-bot-user","kind":"user","risk_tier":"clean","arn":"arn:aws:iam::111122223333:user/ci-bot-user","agent_likelihood":"possible","owner":"platform-team","details":["Type: user","ARN: arn:aws:iam::111122223333:user/ci-bot-user","Risk score: 0.0 / 10 (raw 0.0)","Agent likelihood (heuristic): possible (45%) {automation} [programmatic-key-bot]","Owner: platform-team","Agent signals: name \"ci-bot-user\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; IAM user has 1 access key(s) and no console login profile (automation signal); matched profile \"programmatic-key-bot\""]}},{"data":{"id":"id_adb8684e506b6aee","label":"alice","kind":"user","risk_tier":"clean","arn":"arn:aws:iam::111122223333:user/alice","agent_likelihood":"none","owner":"secops","details":["Type: user","ARN: arn:aws:iam::111122223333:user/alice","Risk score: 0.0 / 10 (raw 0.0)","Agent likelihood (heuristic): none","Owner: secops"]}},{"data":{"id":"id_c354859f48df07dd","label":"AKIAEXAMPLE111111111\n(ci-bot-user)","kind":"key","risk_tier":"medium","arn":"arn:aws:iam::111122223333:user/ci-bot-user","score":3.7,"agent_likelihood":"possible","owner":"platform-team","details":["Type: key","ARN: arn:aws:iam::111122223333:user/ci-bot-user","Risk score: 3.7 / 10 (raw 3.0)","Agent likelihood (heuristic): possible (45%) {automation} [programmatic-key-bot]","Owner: platform-team","Why this score: 3.7/10 (raw 3.0): R4 stale-or-shared-key (high) (+3.0)","Agent signals: name \"ci-bot-user\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; access key belongs to programmatic IAM user \"ci-bot-user\" with no console login profile (automation signal); matched profile \"programmatic-key-bot\"","Findings: R4 (high)","Observed IPs (best-effort): 198.51.100.14, 203.0.113.88","Recent CloudTrail actions: s3:ListBuckets, sts:GetCallerIdentity"]}},{"data":{"id":"id_d5e1cdd7aed23ee0","label":"gh-wildcard-deploy","kind":"role","risk_tier":"medium","arn":"arn:aws:iam::111122223333:role/gh-wildcard-deploy","score":3.7,"agent_likelihood":"possible","owner":"devops-team","details":["Type: role","ARN: arn:aws:iam::111122223333:role/gh-wildcard-deploy","Risk score: 3.7 / 10 (raw 3.0)","Agent likelihood (heuristic): possible (45%) {automation} [ci-oidc-automation]","Owner: devops-team","Why this score: 3.7/10 (raw 3.0): R5 loose-trust (high) (+3.0)","Agent signals: name \"gh-wildcard-deploy\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; trust policy federates with OIDC/workload provider matching \"token.actions.githubusercontent.com\" (arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com); matched profile \"ci-oidc-automation\"","Findings: R5 (high)","Recent CloudTrail actions: sts:AssumeRoleWithWebIdentity, s3:PutObject"]}},{"data":{"id":"id_d606600300c8adae","label":"bedrock-support-agent","kind":"role","risk_tier":"critical","arn":"arn:aws:iam::111122223333:role/bedrock-support-agent","score":8.3,"agent_likelihood":"likely","owner":"\u003cnone\u003e","details":["Type: role","ARN: arn:aws:iam::111122223333:role/bedrock-support-agent","Risk score: 8.3 / 10 (raw 11.5)","Agent likelihood (heuristic): likely (100%) {ai_agent} [bedrock-agent]","Owner: \u003cnone\u003e","Why this score: 8.3/10 (raw 11.5): R1 wildcard-permissions (critical) (+4.0) + R2 unused-permissions (medium) (+2.0) + R3 no-owner (medium) (+2.0) + R5 loose-trust (medium) (+2.0) + agent_likelihood=likely bonus (+1.5)","AI/LLM services: bedrock","CloudTrail userAgents: langchain-aws/0.2.1 Boto3/1.35.0","30d activity: 148 calls in 30d: bedrock:InvokeModel (112), s3:GetObject (36)","Permissions boundary: arn:aws:iam::111122223333:policy/sandbox-boundary","Agent signals: tag agent=\"true\" matches configured agent tag key; name \"bedrock-support-agent\" contains configured AI name tokens \"agent\", \"bedrock\" (counted once); trust policy allows automation service principal bedrock.amazonaws.com; observed runtime activity in AI/LLM service(s): bedrock; CloudTrail userAgent matches AI framework trace(s): langchain; matched profile \"bedrock-agent\"","Findings: R1 (critical), R2 (medium), R3 (medium), R5 (medium)","Recent CloudTrail actions: bedrock:InvokeModel, s3:GetObject"]}},{"data":{"id":"id_dcb74bab1bd227af","label":"sagemaker-eval-runner","kind":"role","risk_tier":"critical","arn":"arn:aws:iam::111122223333:role/sagemaker-eval-runner","score":7.3,"agent_likelihood":"likely","owner":"\u003cnone\u003e","details":["Type: role","ARN: arn:aws:iam::111122223333:role/sagemaker-eval-runner","Risk score: 7.3 / 10 (raw 8.5)","Agent likelihood (heuristic): likely (100%) {ai_agent}","Owner: \u003cnone\u003e","Why this score: 7.3/10 (raw 8.5): R3 no-owner (medium) (+2.0) + R5 loose-trust (medium) (+2.0) + R7 sensitive-service-wildcard (high) (+3.0) + agent_likelihood=likely bonus (+1.5)","AI/LLM services: sagemaker","Agent signals: name \"sagemaker-eval-runner\" matches configured pattern \"(?i)(^|[-_/.:])(bots?|auto|automation|pipeline|deploy|ci|cd|worker|runner)([-_/.:]|$)\"; trust policy allows automation service principal sagemaker.amazonaws.com; policies explicitly grant AI/LLM service permission(s): sagemaker; observed runtime activity in AI/LLM service(s): sagemaker","Findings: R3 (medium), R5 (medium), R7 (high)","Recent CloudTrail actions: sagemaker:InvokeEndpoint"]}},{"data":{"id":"id_f233991436b53589","label":"mcp-ops-agent","kind":"role","risk_tier":"critical","arn":"arn:aws:iam::111122223333:role/mcp-ops-agent","score":8.5,"agent_likelihood":"likely","owner":"\u003cnone\u003e","details":["Type: role","ARN: arn:aws:iam::111122223333:role/mcp-ops-agent","Risk score: 8.5 / 10 (raw 12.5)","Agent likelihood (heuristic): likely (100%) {ai_agent} [mcp-or-framework-agent]","Owner: \u003cnone\u003e","Why this score: 8.5/10 (raw 12.5): R2 unused-permissions (medium) (+2.0) + R3 no-owner (medium) (+2.0) + R6 privilege-escalation-path (critical) (+4.0) + R7 sensitive-service-wildcard (high) (+3.0) + agent_likelihood=likely bonus (+1.5)","AI/LLM services: bedrock","CloudTrail userAgents: anthropic-sdk-python/0.49.0 Boto3/1.35.0","30d activity: 84 calls in 30d: bedrock:InvokeModel (61), secretsmanager:GetSecretValue (23)","Agent signals: tag workload=\"mcp-agent\" contains configured agent token \"mcp\"; name \"mcp-ops-agent\" contains configured AI name tokens \"agent\", \"mcp\" (counted once); trust policy allows automation service principal ecs-tasks.amazonaws.com; policies explicitly grant AI/LLM service permission(s): bedrock; observed runtime activity in AI/LLM service(s): bedrock; CloudTrail userAgent matches AI framework trace(s): anthropic; matched profile \"mcp-or-framework-agent\"","Findings: R2 (medium), R3 (medium), R6 (critical), R7 (high)","Recent CloudTrail actions: bedrock:InvokeModel, secretsmanager:GetSecretValue"]}},{"data":{"id":"pol_1b8ef8815852746e","label":"bedrock-invoke-scoped","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_337408e6d06ba353","label":"billing-dynamodb-scoped","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_59c1c7078df90822","label":"sagemaker-eval-broad","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_76bc1175bb0d3933","label":"ci-read-s3","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_791414c331f6718b","label":"deploy-inline","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_88576c093ec14da8","label":"AdministratorAccess","kind":"policy","risk_tier":"critical","arn":"arn:aws:iam::aws:policy/AdministratorAccess","details":["Kind: managed","ARN: arn:aws:iam::aws:policy/AdministratorAccess","Grants wildcard admin permissions (Action:* Resource:* or AdministratorAccess)"]}},{"data":{"id":"pol_8bcf14e2acb91a7c","label":"mcp-ops-inline","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_e744bed34db39edc","label":"etl-s3-read","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"pol_ff819efb874ceefa","label":"tf-state-read","kind":"policy","risk_tier":"neutral","details":["Kind: inline"]}},{"data":{"id":"trust_0ee79436e677e32b","label":"OIDC: token.actions.githubusercontent.com","kind":"trust","risk_tier":"high","details":["Principal type: oidc","Principal: arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com","Actions: sts:AssumeRoleWithWebIdentity"]}},{"data":{"id":"trust_703fc3d761096baa","label":"sagemaker.amazonaws.com","kind":"trust","risk_tier":"neutral","details":["Principal type: service","Principal: sagemaker.amazonaws.com","Actions: sts:AssumeRole"]}},{"data":{"id":"trust_74d00fc85cf4e9cd","label":"bedrock.amazonaws.com","kind":"trust","risk_tier":"neutral","details":["Principal type: service","Principal: bedrock.amazonaws.com","Actions: sts:AssumeRole"]}},{"data":{"id":"trust_d00bb3e756f87679","label":"ecs-tasks.amazonaws.com","kind":"trust","risk_tier":"neutral","details":["Principal type: service","Principal: ecs-tasks.amazonaws.com","Actions: sts:AssumeRole"]}},{"data":{"id":"trust_f6865b389aaf22ba","label":"lambda.amazonaws.com","kind":"trust","risk_tier":"neutral","details":["Principal type: service","Principal: lambda.amazonaws.com","Actions: sts:AssumeRole"]}}],"edges":[{"data":{"id":"edge_132fc453254242f6","source":"id_dcb74bab1bd227af","target":"pol_59c1c7078df90822","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_1d5b52f864c802fd","source":"trust_74d00fc85cf4e9cd","target":"id_d606600300c8adae","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_3a0ac7717bab8f98","source":"id_5942f5f7fa3f49e1","target":"pol_ff819efb874ceefa","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_3fcade8210bb7b71","source":"trust_0ee79436e677e32b","target":"id_5942f5f7fa3f49e1","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_4d3e890306072d90","source":"id_6ccab03c8602cb2f","target":"pol_1b8ef8815852746e","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_5b3eb97cee2607c9","source":"id_8bbe382a8603cb02","target":"id_c354859f48df07dd","label":"key","edge_kind":"has_key","risky":true}},{"data":{"id":"edge_737d1dd5fb42c441","source":"id_1b31f0eb4053d809","target":"pol_e744bed34db39edc","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_75e7d31577dd75f0","source":"trust_f6865b389aaf22ba","target":"id_1b31f0eb4053d809","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_765761a24d4bb7a7","source":"id_48529fa2380ef91e","target":"pol_337408e6d06ba353","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_8bd63445e11ed834","source":"trust_f6865b389aaf22ba","target":"id_6ccab03c8602cb2f","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_95810b9c58cbecbd","source":"trust_0ee79436e677e32b","target":"id_d5e1cdd7aed23ee0","label":"assumes","edge_kind":"trusts","risky":true}},{"data":{"id":"edge_a130883dc5a82169","source":"id_d606600300c8adae","target":"boundary_f46839db3fc0d927","label":"boundary","edge_kind":"bounded_by"}},{"data":{"id":"edge_be2f7bfe8aacdf96","source":"trust_d00bb3e756f87679","target":"id_f233991436b53589","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_c1ff7ef347d6d7d8","source":"trust_d00bb3e756f87679","target":"id_48529fa2380ef91e","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_c33ed8808c1e56b7","source":"id_d5e1cdd7aed23ee0","target":"pol_791414c331f6718b","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_c5130e3eb543a794","source":"id_d606600300c8adae","target":"pol_88576c093ec14da8","label":"managed","edge_kind":"has_policy","risky":true}},{"data":{"id":"edge_d4d46dce59640447","source":"trust_703fc3d761096baa","target":"id_dcb74bab1bd227af","label":"assumes","edge_kind":"trusts"}},{"data":{"id":"edge_df523a011fca2624","source":"id_8bbe382a8603cb02","target":"pol_76bc1175bb0d3933","label":"inline","edge_kind":"has_policy"}},{"data":{"id":"edge_e54e681f9abe33d9","source":"id_f233991436b53589","target":"pol_8bcf14e2acb91a7c","label":"inline","edge_kind":"has_policy"}}],"omitted_service_linked":1}</script>
 <script>/**
  * Copyright (c) 2016-2026, The Cytoscape Consortium.
  *
@@ -1223,7 +1399,7 @@ var Kr=function(e){if(!(this instanceof Kr))return new Kr(e);this.id="Thenable/1
         if (show) { visible++; }
       });
       if (countEl) {
-        countEl.textContent = "Showing " + visible + " of " + rows.length;
+        countEl.textContent = "Showing " + visible + " of " + rows.length + " risky";
       }
     }
 
