@@ -24,7 +24,7 @@ No Homebrew? Download a pre-built static binary (`linux`, `darwin`, `windows` ×
 
 ```bash
 # Example: macOS Apple Silicon (replace archive name for Linux/Intel/Windows)
-curl -fsSL https://github.com/devel0mer/nhilens/releases/latest/download/nhilens_0.2.1_darwin_arm64.tar.gz | tar -xz nhilens
+curl -fsSL https://github.com/devel0mer/nhilens/releases/download/v0.2.1/nhilens_0.2.1_darwin_arm64.tar.gz | tar -xz nhilens
 ./nhilens demo
 ```
 
@@ -61,19 +61,19 @@ nhilens explain R6
 
 ---
 
-## What It Checks
-
-- **Honest AI agent vs. automation heuristics**: Scores 7 configurable signals (tags, names, service/OIDC trusts, programmatic keys, AI/LLM permissions & runtime calls like `bedrock`/`sagemaker`/`q`, and CloudTrail `userAgent` traces) and lists every matched signal. Generic CI/automation roles are labeled `automation` and capped at `45%` (`possible`) so ordinary CI bots do not false-positive as `likely` AI agents.
-- **8 built-in risk rules (`R1–R8`)**: Wildcard admin (`R1`), unused permissions (`R2`), missing owner (`R3`), stale/multi-IP shared keys (`R4`), loose cross-account/OIDC trusts (`R5`), privilege escalation paths (`R6`), sensitive service wildcards (`R7`), and key hygiene (`R8`) — intersecting explicit Denies, IAM permissions boundaries, and optional `--scp-file` SCPs. See [docs/rules.md](docs/rules.md).
-- **Built for CI & drift tracking**: Local SQLite history (`nhilens diff --fail-on-new high`), SARIF 2.1.0 for GitHub Code Scanning, `.nhilens-ignore.yaml` time-bounded waivers, and offline HTML/JSON/Markdown/CSV reports. Full CLI flags, multi-account profile loop, and config docs live in [docs/usage.md](docs/usage.md).
-
-### Where `nhilens` Fits
+## Where `nhilens` Fits
 
 | Tool | Primary Strength | Where `nhilens` Fits |
 |---|---|---|
 | **Prowler / ScoutSuite** | Broad multi-service cloud posture & CIS/compliance benchmarks | Use those for account-wide compliance; use `nhilens` to inventory non-human/AI identities, surface ownership gaps, and rank AI-capable roles |
 | **Cloudsplaining** | Deep per-action IAM policy analysis | Use Cloudsplaining for exhaustive policy action triage; use `nhilens` to correlate policies, AI service usage, trusts, Access Advisor, and CloudTrail per identity |
 | **PMapper** | Graph-based multi-hop IAM privilege escalation path solving | Use PMapper for transitive escalation graphs; use `nhilens` for fast, zero-dependency, offline snapshots centered on AI-agent ownership and blast radius |
+
+## What It Checks
+
+- **Honest AI agent vs. automation heuristics**: Scores 7 configurable signals (tags, names, service/OIDC trusts, programmatic keys, AI/LLM permissions & runtime calls like `bedrock`/`sagemaker`/`q`, and CloudTrail `userAgent` traces) and lists every matched signal. Generic CI/automation roles are labeled `automation` and capped at `45%` (`possible`) so ordinary CI bots do not false-positive as `likely` AI agents.
+- **8 built-in risk rules (`R1–R8`)**: Wildcard admin (`R1`), unused permissions (`R2`), missing owner (`R3`), stale/multi-IP shared keys (`R4`), loose cross-account/OIDC trusts (`R5`), privilege escalation paths (`R6`), sensitive service wildcards (`R7`), and key hygiene (`R8`) — intersecting explicit Denies, IAM permissions boundaries, and optional `--scp-file` SCPs. See [docs/rules.md](docs/rules.md).
+- **Built for CI & drift tracking**: Local SQLite history (`nhilens diff --fail-on-new high`), SARIF 2.1.0 for GitHub Code Scanning, `.nhilens-ignore.yaml` time-bounded waivers, and offline HTML/JSON/Markdown/CSV reports. Full CLI flags, multi-account profile loop, and config docs live in [docs/usage.md](docs/usage.md).
 
 ---
 
@@ -83,8 +83,9 @@ nhilens explain R6
 - **Native AWS Organizations scanning**: Built-in `organizations:ListAccounts` + read-only cross-account `AssumeRole` orchestration, org-wide rollup reports, and automatic SCP discovery (eliminating the manual `--scp-file` and shell profile loop).
 - **Multi-region CloudTrail aggregation**: Fan-out across active regions (`--regions` / all enabled regions) so `userAgent` traces, 30d activity, and R4 multi-IP access keys are correlated account-wide in a single scan.
 
-### Beyond `v0.3`
-- Expanded detection profiles for emerging MCP servers, Bedrock AgentCore / Strands, and cross-account tool-invocation patterns.
+### Exploring (Open an Issue to Upvote)
+- **Expanded AI-agent & MCP signals**: Deterministic Bedrock/SageMaker agent registry discovery, Bedrock AgentCore / Strands profiles, and cross-account tool-invocation patterns.
+- **Additional clouds**: GCP (Service Accounts, Workload Identity Federation, Vertex AI) and Azure (Entra ID Managed Identities, App Registrations, Azure AI) — open or upvote an issue to help prioritize which cloud comes first after `v0.3`.
 
 *(Need multi-account scans today? See the [temporary profile-loop recipe](docs/usage.md#scanning-multiple-accounts--regions-temporary-profile-loop).)*
 
