@@ -6,13 +6,11 @@ import (
 	"io"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/devel0mer/nhilens/internal/collect"
 	"github.com/devel0mer/nhilens/internal/config"
-	"github.com/devel0mer/nhilens/internal/detect"
 	"github.com/devel0mer/nhilens/internal/model"
 	"github.com/devel0mer/nhilens/internal/policy"
 	"github.com/devel0mer/nhilens/internal/report"
@@ -25,18 +23,22 @@ import (
 
 // ScanDeps injects external AWS clients and clock hooks so nhilens scan can be tested end-to-end without AWS calls.
 type ScanDeps struct {
-	NewClients          func(ctx context.Context, profile, region string) (collect.STSClient, collect.IAMClient, collect.CloudTrailClient, error)
-	NewCloudTrailClient func(ctx context.Context, profile, region string) (collect.CloudTrailClient, error)
-	Now                 func() time.Time
-	CollectorHooks      func(opts *collect.Options)
-	CloudTrailHooks     func(opts *collect.CloudTrailOptions)
+	NewClients             func(ctx context.Context, profile, region string) (collect.STSClient, collect.IAMClient, collect.CloudTrailClient, error)
+	NewCloudTrailClient    func(ctx context.Context, profile, region string) (collect.CloudTrailClient, error)
+	NewOrganizationsClient func(ctx context.Context, profile, region string) (collect.OrganizationsClient, error)
+	AssumeAccount          func(ctx context.Context, profile, primaryRegion, targetAccountID string, opts collect.AssumeRoleOptions) (*collect.AccountClients, error)
+	Now                    func() time.Time
+	CollectorHooks         func(opts *collect.Options)
+	CloudTrailHooks        func(opts *collect.CloudTrailOptions)
 }
 
 func defaultScanDeps() ScanDeps {
 	return ScanDeps{
-		NewClients:          collect.NewAWSClients,
-		NewCloudTrailClient: collect.NewCloudTrailClientForRegion,
-		Now:                 time.Now,
+		NewClients:             collect.NewAWSClients,
+		NewCloudTrailClient:    collect.NewCloudTrailClientForRegion,
+		NewOrganizationsClient: collect.NewOrganizationsClient,
+		AssumeAccount:          collect.AssumeAccountClients,
+		Now:                    time.Now,
 	}
 }
 
@@ -45,6 +47,13 @@ type ScanOptions struct {
 	Profile                   string
 	Region                    string
 	Regions                   []string
+	Org                       bool
+	Accounts                  []string
+	ExcludeAccounts           []string
+	AssumeRoleName            string
+	ExternalID                string
+	AccountConcurrency        int
+	SkipOrgSCPs               bool
 	Since                     time.Duration
 	SinceRaw                  string
 	MaxEvents                 int
@@ -66,6 +75,13 @@ func newScanCmd(deps ScanDeps) *cobra.Command {
 		profile                   string
 		region                    string
 		regions                   []string
+		org                       bool
+		accounts                  []string
+		excludeAccounts           []string
+		assumeRoleName            string
+		externalID                string
+		accountConcurrency        int
+		skipOrgSCPs               bool
 		sinceStr                  string
 		maxEvents                 int
 		skipServiceLastAccessed   bool
@@ -80,11 +96,14 @@ func newScanCmd(deps ScanDeps) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "scan",
-		Short: "Scan an AWS account (read-only) and persist findings to SQLite",
+		Short: "Scan one or more AWS accounts (read-only) and persist findings to SQLite",
 		Long: `Collect IAM inventory, access key metadata, service last-accessed data,
-and CloudTrail management events from an AWS account using strictly read-only
-APIs, score non-human identities, persist results to SQLite, and print a ranked
-summary.`,
+and CloudTrail management events from one or more AWS accounts using strictly
+read-only APIs, score non-human identities, persist results to SQLite, and print
+a ranked summary.
+
+Use --regions for multi-region CloudTrail aggregation, or --org / --accounts
+with --assume-role-name for multi-account AWS Organizations audits.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts, err := buildScanOptionsWithRegions(
 				profile, region, cmd.Flags().Changed("region"),
@@ -100,6 +119,9 @@ summary.`,
 			if err != nil {
 				return err
 			}
+			if err := applyMultiAccountOptions(opts, org, accounts, excludeAccounts, assumeRoleName, externalID, accountConcurrency, skipOrgSCPs); err != nil {
+				return err
+			}
 			return runScan(cmd.Context(), cmd.OutOrStdout(), opts, deps)
 		},
 	}
@@ -107,6 +129,13 @@ summary.`,
 	cmd.Flags().StringVar(&profile, "profile", "", "AWS shared configuration/credentials profile name")
 	cmd.Flags().StringVar(&region, "region", "", "Primary AWS region override (defaults to config or AWS SDK chain)")
 	cmd.Flags().StringSliceVar(&regions, "regions", nil, "Comma-separated AWS regions for multi-region CloudTrail lookup, or 'all' for the 17 default-enabled AWS regions")
+	cmd.Flags().BoolVar(&org, "org", false, "Discover and scan all ACTIVE accounts in the AWS Organization (auto-loads effective SCPs)")
+	cmd.Flags().StringSliceVar(&accounts, "accounts", nil, "Comma-separated 12-digit AWS account IDs to scan (filters --org when combined)")
+	cmd.Flags().StringSliceVar(&excludeAccounts, "exclude-accounts", nil, "Comma-separated 12-digit AWS account IDs to exclude from --org / --accounts scans")
+	cmd.Flags().StringVar(&assumeRoleName, "assume-role-name", "", "Read-only IAM role name to assume in target member accounts (e.g. nhilens-readonly)")
+	cmd.Flags().StringVar(&externalID, "external-id", "", "Optional STS ExternalId passed when assuming --assume-role-name")
+	cmd.Flags().IntVar(&accountConcurrency, "account-concurrency", 4, "Maximum AWS accounts scanned concurrently in multi-account mode (1..16)")
+	cmd.Flags().BoolVar(&skipOrgSCPs, "skip-org-scps", false, "Skip automatic Organizations SCP resolution in --org mode")
 	cmd.Flags().StringVar(&sinceStr, "since", "90d", "CloudTrail lookback window (e.g. 90d, 7d, 24h)")
 	cmd.Flags().IntVar(&maxEvents, "max-events", 5000, "Maximum number of CloudTrail events to fetch per region (0 disables CloudTrail lookup)")
 	cmd.Flags().BoolVar(&skipServiceLastAccessed, "skip-service-last-accessed", false, "Skip IAM Access Advisor service last-accessed jobs (faster on large accounts; skips R2)")
@@ -143,90 +172,33 @@ func runScan(ctx context.Context, stdout io.Writer, opts *ScanOptions, deps Scan
 		return err
 	}
 
-	stsClient, iamClient, ctClient, err := deps.NewClients(ctx, opts.Profile, opts.Region)
-	if err != nil {
-		return err
-	}
-
-	cOpts := collect.Options{
-		OwnerTagKeys:              opts.Config.AgentDetection.OwnerTagKeys,
-		MaxConcurrency:            opts.Config.AWS.MaxConcurrency,
-		SkipServiceLastAccessed:   opts.SkipServiceLastAccessed,
-		IncludeServiceLinkedRoles: opts.IncludeServiceLinkedRoles,
-		Now:                       nowFn,
-	}
-	if deps.CollectorHooks != nil {
-		deps.CollectorHooks(&cOpts)
-	}
-
-	collector := collect.NewIAMCollector(stsClient, iamClient, cOpts)
-	run, err := collector.Collect(ctx, opts.Profile, opts.Region, opts.SinceRaw)
-	if err != nil {
-		return err
-	}
-
-	// Enrich with best-effort CloudTrail management events across all configured regions
-	// before rule evaluation (powers R4 cross-region shared-key detection and AI userAgent traces).
-	ctOpts := collect.CloudTrailOptions{
-		Since:          opts.Since,
-		MaxEvents:      opts.MaxEvents,
-		MaxConcurrency: opts.Config.AWS.MaxConcurrency,
-		Now:            nowFn,
-	}
-	if deps.CloudTrailHooks != nil {
-		deps.CloudTrailHooks(&ctOpts)
-	}
-
-	targetRegions := opts.Regions
-	if len(targetRegions) == 0 {
-		targetRegions = []string{opts.Region}
-	}
-	ctFactory := deps.NewCloudTrailClient
-	if ctFactory == nil {
-		ctFactory = collect.NewCloudTrailClientForRegion
-	}
-	regionClients := make([]collect.RegionCloudTrailClient, 0, len(targetRegions))
-	for _, r := range targetRegions {
-		if r == opts.Region || len(targetRegions) == 1 {
-			regionClients = append(regionClients, collect.RegionCloudTrailClient{Region: r, Client: ctClient})
-			continue
+	var run *model.ScanRun
+	if opts.Org || len(opts.Accounts) > 0 {
+		run, err = runMultiAccountScan(ctx, opts, deps, suppFile, scpPolicies, nowFn)
+		if err != nil {
+			return err
 		}
-		if opts.MaxEvents == 0 {
-			regionClients = append(regionClients, collect.RegionCloudTrailClient{Region: r, Client: nil})
-			continue
+	} else {
+		stsClient, iamClient, ctClient, clientErr := deps.NewClients(ctx, opts.Profile, opts.Region)
+		if clientErr != nil {
+			return clientErr
 		}
-		regionalCT, ctErr := ctFactory(ctx, opts.Profile, r)
-		if ctErr != nil {
-			run.Warnings = append(run.Warnings, fmt.Sprintf("[%s] failed to initialize CloudTrail client: %v", r, ctErr))
-			regionClients = append(regionClients, collect.RegionCloudTrailClient{Region: r, Client: nil})
-			continue
+		ctFactory := deps.NewCloudTrailClient
+		if ctFactory == nil {
+			ctFactory = collect.NewCloudTrailClientForRegion
 		}
-		regionClients = append(regionClients, collect.RegionCloudTrailClient{Region: r, Client: regionalCT})
+		run, _, err = executeAccountPipeline(
+			ctx, opts, deps, suppFile, scpPolicies, len(scpPolicies),
+			stsClient, iamClient, ctClient,
+			func(ctx context.Context, region string) (collect.CloudTrailClient, error) {
+				return ctFactory(ctx, opts.Profile, region)
+			},
+			nowFn,
+		)
+		if err != nil {
+			return err
+		}
 	}
-	collect.EnrichRegions(ctx, regionClients, ctOpts, run)
-
-	// Parse attached/inline/group policies and trust documents.
-	parseWarnings := policy.ParseAll(run.Identities)
-	if len(parseWarnings) > 0 {
-		run.Warnings = append(run.Warnings, parseWarnings...)
-		sort.Strings(run.Warnings)
-	}
-
-	nowUTC := nowFn().UTC()
-
-	// Run heuristic agent classification, enabled risk rules (with boundary & optional SCP intersection),
-	// optional baseline suppressions, and scoring.
-	detect.ClassifyAll(run.Identities, opts.Config)
-	rules.EvaluateAllWithContext(run.Identities, rules.Context{
-		Config:      opts.Config,
-		Now:         nowUTC,
-		SCPPolicies: scpPolicies,
-	})
-	if suppFile != nil {
-		suppress.Apply(run, suppFile, nowUTC)
-	}
-	score.ScoreAll(run.Identities, opts.Config)
-	finalizeScanCoverage(run, opts, len(scpPolicies), len(parseWarnings))
 
 	// Persist normalized results to SQLite before printing output or evaluating --fail-on.
 	st, err := store.Open(opts.DBPath)
@@ -544,4 +516,39 @@ func containsString(list []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func applyMultiAccountOptions(
+	opts *ScanOptions,
+	org bool,
+	accounts []string,
+	excludeAccounts []string,
+	assumeRoleName string,
+	externalID string,
+	accountConcurrency int,
+	skipOrgSCPs bool,
+) error {
+	parsedAccounts, err := parseAndValidateAccountIDs("--accounts", accounts)
+	if err != nil {
+		return err
+	}
+	parsedExcludes, err := parseAndValidateAccountIDs("--exclude-accounts", excludeAccounts)
+	if err != nil {
+		return err
+	}
+	if accountConcurrency < 1 || accountConcurrency > 16 {
+		return fmt.Errorf("invalid --account-concurrency: must be between 1 and 16, got %d", accountConcurrency)
+	}
+	if len(parsedExcludes) > 0 && !org && len(parsedAccounts) == 0 {
+		return fmt.Errorf("--exclude-accounts requires --org or --accounts")
+	}
+
+	opts.Org = org
+	opts.Accounts = parsedAccounts
+	opts.ExcludeAccounts = parsedExcludes
+	opts.AssumeRoleName = strings.TrimSpace(assumeRoleName)
+	opts.ExternalID = strings.TrimSpace(externalID)
+	opts.AccountConcurrency = accountConcurrency
+	opts.SkipOrgSCPs = skipOrgSCPs
+	return nil
 }

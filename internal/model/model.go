@@ -67,6 +67,20 @@ const (
 	CoverageStatusPartial  = "partial"
 )
 
+// AccountScanSummary records per-account status and KPI totals for multi-account / AWS Organizations scans.
+type AccountScanSummary struct {
+	AccountID     string `json:"account_id"`
+	AccountName   string `json:"account_name,omitempty"`
+	Status        string `json:"status"` // ok | partial | failed
+	Identities    int    `json:"identities"`
+	AgentLikely   int    `json:"agent_likely"`
+	FindingsTotal int    `json:"findings_total"`
+	CriticalCount int    `json:"critical_count"`
+	HighCount     int    `json:"high_count"`
+	SCPCount      int    `json:"scp_count,omitempty"`
+	Error         string `json:"error,omitempty"`
+}
+
 // RegionCloudTrailCoverage records per-region CloudTrail LookupEvents coverage and errors.
 type RegionCloudTrailCoverage struct {
 	Region         string `json:"region"`
@@ -81,6 +95,10 @@ type RegionCloudTrailCoverage struct {
 type ScanCoverage struct {
 	Status                       string                     `json:"status"` // complete | partial
 	AccountID                    string                     `json:"account_id"`
+	OrganizationID               string                     `json:"organization_id,omitempty"`
+	AccountsScanned              int                        `json:"accounts_scanned,omitempty"`
+	AccountsFailed               int                        `json:"accounts_failed,omitempty"`
+	AccountSummaries             []AccountScanSummary       `json:"account_summaries,omitempty"`
 	Region                       string                     `json:"region"`
 	RegionsScanned               []string                   `json:"regions_scanned,omitempty"`
 	SinceWindow                  string                     `json:"since_window"`
@@ -107,23 +125,25 @@ type ScanCoverage struct {
 	CollectionErrorCount         int                        `json:"collection_error_count"`
 }
 
-// ScanRun represents a single read-only audit run against an AWS account.
+// ScanRun represents a single read-only audit run against one or more AWS accounts.
 type ScanRun struct {
-	ID                     string        `json:"id"`
-	AccountID              string        `json:"account_id"`
-	CallerARN              string        `json:"caller_arn"`
-	Region                 string        `json:"region"`
-	Regions                []string      `json:"regions,omitempty"`
-	Profile                string        `json:"profile,omitempty"`
-	StartedAt              time.Time     `json:"started_at"`
-	CompletedAt            time.Time     `json:"completed_at"`
-	SinceWindow            string        `json:"since_window"`
-	CloudTrailStatus       string        `json:"cloudtrail_status"`
-	CloudTrailEventCount   int           `json:"cloudtrail_event_count"`
-	SuppressedFindingCount int           `json:"suppressed_finding_count,omitempty"`
-	Coverage               *ScanCoverage `json:"coverage,omitempty"`
-	Warnings               []string      `json:"warnings,omitempty"`
-	Identities             []Identity    `json:"identities"`
+	ID                     string               `json:"id"`
+	AccountID              string               `json:"account_id"`
+	OrganizationID         string               `json:"organization_id,omitempty"`
+	Accounts               []AccountScanSummary `json:"accounts,omitempty"`
+	CallerARN              string               `json:"caller_arn"`
+	Region                 string               `json:"region"`
+	Regions                []string             `json:"regions,omitempty"`
+	Profile                string               `json:"profile,omitempty"`
+	StartedAt              time.Time            `json:"started_at"`
+	CompletedAt            time.Time            `json:"completed_at"`
+	SinceWindow            string               `json:"since_window"`
+	CloudTrailStatus       string               `json:"cloudtrail_status"`
+	CloudTrailEventCount   int                  `json:"cloudtrail_event_count"`
+	SuppressedFindingCount int                  `json:"suppressed_finding_count,omitempty"`
+	Coverage               *ScanCoverage        `json:"coverage,omitempty"`
+	Warnings               []string             `json:"warnings,omitempty"`
+	Identities             []Identity           `json:"identities"`
 }
 
 // Identity is the normalized audit record for a single IAM role, IAM user, or access key.
@@ -137,6 +157,7 @@ type Identity struct {
 	PermissionsBoundaryARN   string                `json:"permissions_boundary_arn,omitempty"`
 	PermissionsBoundaryDoc   string                `json:"permissions_boundary_doc,omitempty"`
 	Account                  string                `json:"account"`
+	AccountName              string                `json:"account_name,omitempty"`
 	Created                  *time.Time            `json:"created,omitempty"`
 	LastUsed                 *time.Time            `json:"last_used,omitempty"`
 	Tags                     map[string]string     `json:"tags,omitempty"`
@@ -278,6 +299,34 @@ type ActivityCount struct {
 type ScoreContribution struct {
 	Source string  `json:"source"`
 	Points float64 `json:"points"`
+}
+
+// IsMultiAccount reports whether this scan covers multiple AWS accounts or an AWS Organization.
+func (r *ScanRun) IsMultiAccount() bool {
+	if r == nil {
+		return false
+	}
+	if len(r.Accounts) > 1 || r.OrganizationID != "" {
+		return true
+	}
+	if r.Coverage != nil && (len(r.Coverage.AccountSummaries) > 1 || r.Coverage.OrganizationID != "") {
+		return true
+	}
+	return false
+}
+
+// EffectiveAccounts returns per-account summaries when available.
+func (r *ScanRun) EffectiveAccounts() []AccountScanSummary {
+	if r == nil {
+		return nil
+	}
+	if len(r.Accounts) > 0 {
+		return r.Accounts
+	}
+	if r.Coverage != nil && len(r.Coverage.AccountSummaries) > 0 {
+		return r.Coverage.AccountSummaries
+	}
+	return nil
 }
 
 // EffectiveRegions returns the deduplicated list of AWS regions covered by this scan.

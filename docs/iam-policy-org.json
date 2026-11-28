@@ -1,0 +1,40 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "NHILensReadOnlyOrgDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity",
+        "organizations:DescribeOrganization",
+        "organizations:ListAccounts",
+        "organizations:ListParents",
+        "organizations:ListPoliciesForTarget",
+        "organizations:DescribePolicy"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NHILensReadOnlyCrossAccountAssume",
+      "Effect": "Allow",
+      "Action": [
+        "sts:AssumeRole"
+      ],
+      "Resource": "arn:aws:iam::*:role/nhilens-readonly"
+    },
+    {
+      "Sid": "NHILensReadOnlyLocalAccountAudit",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetAccountAuthorizationDetails",
+        "iam:GetLoginProfile",
+        "iam:ListAccessKeys",
+        "iam:GetAccessKeyLastUsed",
+        "iam:GenerateServiceLastAccessedDetails",
+        "iam:GetServiceLastAccessedDetails",
+        "cloudtrail:LookupEvents"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

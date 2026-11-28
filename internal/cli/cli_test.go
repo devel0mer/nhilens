@@ -255,3 +255,69 @@ func TestIAMPolicyDocIsStrictlyReadOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestOrgIAMPolicyDocIsStrictlyReadOnly(t *testing.T) {
+	policyPath := filepath.Join("..", "..", "docs", "iam-policy-org.json")
+	raw, err := os.ReadFile(policyPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", policyPath, err)
+	}
+
+	var doc struct {
+		Version   string `json:"Version"`
+		Statement []struct {
+			Sid      string   `json:"Sid"`
+			Effect   string   `json:"Effect"`
+			Action   []string `json:"Action"`
+			Resource string   `json:"Resource"`
+		} `json:"Statement"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parse iam-policy-org.json: %v", err)
+	}
+	if doc.Version != "2012-10-17" || len(doc.Statement) == 0 {
+		t.Fatalf("invalid iam-policy-org.json header/statements")
+	}
+
+	allowed := map[string]bool{
+		"sts:GetCallerIdentity":                  true,
+		"sts:AssumeRole":                         true,
+		"organizations:DescribeOrganization":     true,
+		"organizations:ListAccounts":             true,
+		"organizations:ListParents":              true,
+		"organizations:ListPoliciesForTarget":    true,
+		"organizations:DescribePolicy":           true,
+		"iam:GetAccountAuthorizationDetails":     true,
+		"iam:GetLoginProfile":                    true,
+		"iam:ListAccessKeys":                     true,
+		"iam:GetAccessKeyLastUsed":               true,
+		"iam:GenerateServiceLastAccessedDetails": true,
+		"iam:GetServiceLastAccessedDetails":      true,
+		"cloudtrail:LookupEvents":                true,
+	}
+
+	seen := map[string]bool{}
+	for _, stmt := range doc.Statement {
+		if stmt.Effect != "Allow" {
+			t.Errorf("unexpected Effect %q", stmt.Effect)
+		}
+		for _, act := range stmt.Action {
+			if strings.Contains(act, "*") {
+				t.Errorf("wildcard action %q is forbidden in org policy", act)
+			}
+			if !allowed[act] {
+				t.Errorf("action %q is not in the strictly read-only org allowlist", act)
+			}
+			if act == "sts:AssumeRole" && stmt.Resource == "*" {
+				t.Errorf("sts:AssumeRole must be scoped to the read-only audit role ARN, not Resource:*")
+			}
+			seen[act] = true
+		}
+	}
+
+	for act := range allowed {
+		if !seen[act] {
+			t.Errorf("expected action %q to be listed in docs/iam-policy-org.json", act)
+		}
+	}
+}

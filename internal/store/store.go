@@ -373,6 +373,12 @@ func (s *Store) LoadScan(ctx context.Context, scanID string) (*model.ScanRun, er
 		if len(cov.RegionsScanned) > 0 {
 			run.Regions = append([]string(nil), cov.RegionsScanned...)
 		}
+		if cov.OrganizationID != "" {
+			run.OrganizationID = cov.OrganizationID
+		}
+		if len(cov.AccountSummaries) > 0 {
+			run.Accounts = append([]model.AccountScanSummary(nil), cov.AccountSummaries...)
+		}
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
