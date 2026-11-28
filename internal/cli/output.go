@@ -48,8 +48,13 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 		sevCounts[model.SeverityLow] +
 		sevCounts[model.SeverityInfo]
 
+	regions := run.EffectiveRegions()
 	_, _ = fmt.Fprintf(w, "nhilens scan summary\n")
-	_, _ = fmt.Fprintf(w, "  Account:    %s (region: %s)\n", run.AccountID, run.Region)
+	if len(regions) > 1 {
+		_, _ = fmt.Fprintf(w, "  Account:    %s (regions: %s)\n", run.AccountID, strings.Join(regions, ", "))
+	} else {
+		_, _ = fmt.Fprintf(w, "  Account:    %s (region: %s)\n", run.AccountID, run.Region)
+	}
 	_, _ = fmt.Fprintf(w, "  Scan ID:    %s\n", run.ID)
 	_, _ = fmt.Fprintf(w, "  Identities: %d total (%d roles, %d users, %d keys; %d likely AI agent, %d automation/possible; %d service-linked)\n",
 		len(run.Identities), roles, users, keys, likely, possible, slrs)
@@ -70,6 +75,13 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 	switch {
 	case run.CloudTrailStatus == model.CloudTrailStatusDisabled:
 		_, _ = fmt.Fprintf(w, "  CloudTrail: disabled (--max-events=0; userAgent traces and R4 multi-IP skipped)\n")
+	case len(regions) > 1:
+		detail := formatRegionCloudTrailBrief(run.Coverage)
+		if detail != "" {
+			_, _ = fmt.Fprintf(w, "  CloudTrail: %s (%d events analyzed across %d regions: %s)\n", run.CloudTrailStatus, run.CloudTrailEventCount, len(regions), detail)
+		} else {
+			_, _ = fmt.Fprintf(w, "  CloudTrail: %s (%d events analyzed across %d regions)\n", run.CloudTrailStatus, run.CloudTrailEventCount, len(regions))
+		}
 	case run.CloudTrailEventCount > 0:
 		_, _ = fmt.Fprintf(w, "  CloudTrail: %s (%d events analyzed; region %s only)\n", run.CloudTrailStatus, run.CloudTrailEventCount, regionLabel)
 	default:
@@ -153,11 +165,34 @@ func writeCloudTrailScopeNotice(w io.Writer, run *model.ScanRun) {
 		_, _ = fmt.Fprintln(w, "\nScope note: CloudTrail lookup was disabled (--max-events=0). Agent userAgent traces, 30d activity, and R4 multi-IP key checks were skipped.")
 		return
 	}
+	regions := run.EffectiveRegions()
+	if len(regions) > 1 {
+		_, _ = fmt.Fprintf(w, "\nScope note: CloudTrail signals (userAgent traces, 30d activity, R4 multi-IP keys) aggregated across %d regions (%s) — activity in unqueried AWS regions is not included.\n", len(regions), strings.Join(regions, ", "))
+		return
+	}
 	regionLabel := strings.TrimSpace(run.Region)
 	if regionLabel == "" {
 		regionLabel = "default"
 	}
 	_, _ = fmt.Fprintf(w, "\nScope note: CloudTrail signals (userAgent traces, 30d activity, R4 multi-IP keys) cover region %s only — activity in other AWS regions is not included.\n", regionLabel)
+}
+
+func formatRegionCloudTrailBrief(cov *model.ScanCoverage) string {
+	if cov == nil || len(cov.CloudTrailRegions) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(cov.CloudTrailRegions))
+	for _, rc := range cov.CloudTrailRegions {
+		switch {
+		case rc.Error != "":
+			parts = append(parts, fmt.Sprintf("%s=%s(%d, err)", rc.Region, rc.Status, rc.EventsAnalyzed))
+		case rc.Truncated:
+			parts = append(parts, fmt.Sprintf("%s=%d(capped)", rc.Region, rc.EventsAnalyzed))
+		default:
+			parts = append(parts, fmt.Sprintf("%s=%d", rc.Region, rc.EventsAnalyzed))
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 func formatFindingsSummary(id model.Identity) string {

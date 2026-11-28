@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -24,16 +25,18 @@ import (
 
 // ScanDeps injects external AWS clients and clock hooks so nhilens scan can be tested end-to-end without AWS calls.
 type ScanDeps struct {
-	NewClients      func(ctx context.Context, profile, region string) (collect.STSClient, collect.IAMClient, collect.CloudTrailClient, error)
-	Now             func() time.Time
-	CollectorHooks  func(opts *collect.Options)
-	CloudTrailHooks func(opts *collect.CloudTrailOptions)
+	NewClients          func(ctx context.Context, profile, region string) (collect.STSClient, collect.IAMClient, collect.CloudTrailClient, error)
+	NewCloudTrailClient func(ctx context.Context, profile, region string) (collect.CloudTrailClient, error)
+	Now                 func() time.Time
+	CollectorHooks      func(opts *collect.Options)
+	CloudTrailHooks     func(opts *collect.CloudTrailOptions)
 }
 
 func defaultScanDeps() ScanDeps {
 	return ScanDeps{
-		NewClients: collect.NewAWSClients,
-		Now:        time.Now,
+		NewClients:          collect.NewAWSClients,
+		NewCloudTrailClient: collect.NewCloudTrailClientForRegion,
+		Now:                 time.Now,
 	}
 }
 
@@ -41,6 +44,7 @@ func defaultScanDeps() ScanDeps {
 type ScanOptions struct {
 	Profile                   string
 	Region                    string
+	Regions                   []string
 	Since                     time.Duration
 	SinceRaw                  string
 	MaxEvents                 int
@@ -55,10 +59,13 @@ type ScanOptions struct {
 	FailOn                    string
 }
 
+var awsRegionPattern = regexp.MustCompile(`^[a-z]{2}(-[a-z]+)+-\d+$`)
+
 func newScanCmd(deps ScanDeps) *cobra.Command {
 	var (
 		profile                   string
 		region                    string
+		regions                   []string
 		sinceStr                  string
 		maxEvents                 int
 		skipServiceLastAccessed   bool
@@ -79,8 +86,10 @@ and CloudTrail management events from an AWS account using strictly read-only
 APIs, score non-human identities, persist results to SQLite, and print a ranked
 summary.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts, err := buildScanOptions(
-				profile, region, sinceStr, maxEvents,
+			opts, err := buildScanOptionsWithRegions(
+				profile, region, cmd.Flags().Changed("region"),
+				regions,
+				sinceStr, maxEvents,
 				skipServiceLastAccessed,
 				includeServiceLinkedRoles,
 				cmd.Flags().Changed("include-service-linked-roles"),
@@ -96,9 +105,10 @@ summary.`,
 	}
 
 	cmd.Flags().StringVar(&profile, "profile", "", "AWS shared configuration/credentials profile name")
-	cmd.Flags().StringVar(&region, "region", "", "AWS region override (defaults to config or AWS SDK chain)")
+	cmd.Flags().StringVar(&region, "region", "", "Primary AWS region override (defaults to config or AWS SDK chain)")
+	cmd.Flags().StringSliceVar(&regions, "regions", nil, "Comma-separated AWS regions for multi-region CloudTrail lookup, or 'all' for the 17 default-enabled AWS regions")
 	cmd.Flags().StringVar(&sinceStr, "since", "90d", "CloudTrail lookback window (e.g. 90d, 7d, 24h)")
-	cmd.Flags().IntVar(&maxEvents, "max-events", 5000, "Maximum number of CloudTrail events to fetch (0 disables CloudTrail lookup)")
+	cmd.Flags().IntVar(&maxEvents, "max-events", 5000, "Maximum number of CloudTrail events to fetch per region (0 disables CloudTrail lookup)")
 	cmd.Flags().BoolVar(&skipServiceLastAccessed, "skip-service-last-accessed", false, "Skip IAM Access Advisor service last-accessed jobs (faster on large accounts; skips R2)")
 	cmd.Flags().BoolVar(&includeServiceLinkedRoles, "include-service-linked-roles", false, "Evaluate risk rules against AWS service-linked roles (/aws-service-role/)")
 	cmd.Flags().StringVar(&ignoreFile, "ignore", "", "Path to optional .nhilens-ignore.yaml baseline/suppression file")
@@ -155,16 +165,45 @@ func runScan(ctx context.Context, stdout io.Writer, opts *ScanOptions, deps Scan
 		return err
 	}
 
-	// Enrich with best-effort CloudTrail management events before rule evaluation (powers R4 shared-key detection).
+	// Enrich with best-effort CloudTrail management events across all configured regions
+	// before rule evaluation (powers R4 cross-region shared-key detection and AI userAgent traces).
 	ctOpts := collect.CloudTrailOptions{
-		Since:     opts.Since,
-		MaxEvents: opts.MaxEvents,
-		Now:       nowFn,
+		Since:          opts.Since,
+		MaxEvents:      opts.MaxEvents,
+		MaxConcurrency: opts.Config.AWS.MaxConcurrency,
+		Now:            nowFn,
 	}
 	if deps.CloudTrailHooks != nil {
 		deps.CloudTrailHooks(&ctOpts)
 	}
-	collect.NewCloudTrailCollector(ctClient, ctOpts).Enrich(ctx, run)
+
+	targetRegions := opts.Regions
+	if len(targetRegions) == 0 {
+		targetRegions = []string{opts.Region}
+	}
+	ctFactory := deps.NewCloudTrailClient
+	if ctFactory == nil {
+		ctFactory = collect.NewCloudTrailClientForRegion
+	}
+	regionClients := make([]collect.RegionCloudTrailClient, 0, len(targetRegions))
+	for _, r := range targetRegions {
+		if r == opts.Region || len(targetRegions) == 1 {
+			regionClients = append(regionClients, collect.RegionCloudTrailClient{Region: r, Client: ctClient})
+			continue
+		}
+		if opts.MaxEvents == 0 {
+			regionClients = append(regionClients, collect.RegionCloudTrailClient{Region: r, Client: nil})
+			continue
+		}
+		regionalCT, ctErr := ctFactory(ctx, opts.Profile, r)
+		if ctErr != nil {
+			run.Warnings = append(run.Warnings, fmt.Sprintf("[%s] failed to initialize CloudTrail client: %v", r, ctErr))
+			regionClients = append(regionClients, collect.RegionCloudTrailClient{Region: r, Client: nil})
+			continue
+		}
+		regionClients = append(regionClients, collect.RegionCloudTrailClient{Region: r, Client: regionalCT})
+	}
+	collect.EnrichRegions(ctx, regionClients, ctOpts, run)
 
 	// Parse attached/inline/group policies and trust documents.
 	parseWarnings := policy.ParseAll(run.Identities)
@@ -243,6 +282,11 @@ func finalizeScanCoverage(run *model.ScanRun, opts *ScanOptions, scpCount, parse
 	cov := run.Coverage
 	cov.AccountID = run.AccountID
 	cov.Region = run.Region
+	if len(run.Regions) > 0 {
+		cov.RegionsScanned = run.Regions
+	} else if len(cov.RegionsScanned) == 0 && strings.TrimSpace(run.Region) != "" {
+		cov.RegionsScanned = []string{run.Region}
+	}
 	cov.SinceWindow = run.SinceWindow
 	cov.CloudTrailStatus = run.CloudTrailStatus
 	cov.CloudTrailEventsAnalyzed = run.CloudTrailEventCount
@@ -290,11 +334,18 @@ func finalizeScanCoverage(run *model.ScanRun, opts *ScanOptions, scpCount, parse
 	cov.ServiceLinkedRolesExcluded = slrExcluded
 	cov.PartialIdentities = partialCount
 	cov.SkippedChecks = skipped
+	ctRegionErrors := 0
+	for _, rc := range cov.CloudTrailRegions {
+		if rc.Error != "" {
+			ctRegionErrors++
+		}
+	}
 	cov.CollectionErrorCount = cov.LoginProfileFailed +
 		cov.AccessKeyListFailed +
 		cov.AccessKeyLastUsedFailed +
 		cov.AccessAdvisorFailed +
-		cov.PolicyParseErrors
+		cov.PolicyParseErrors +
+		ctRegionErrors
 
 	isPartial := cov.CollectionErrorCount > 0 ||
 		cov.PartialIdentities > 0 ||
@@ -312,6 +363,30 @@ func finalizeScanCoverage(run *model.ScanRun, opts *ScanOptions, scpCount, parse
 
 func buildScanOptions(
 	profile, region, sinceStr string,
+	maxEvents int,
+	skipServiceLastAccessed bool,
+	includeServiceLinkedRoles bool,
+	includeSLRFlagSet bool,
+	ignoreFile string,
+	scpFile string,
+	configPath, outDir, format, failOn string,
+) (*ScanOptions, error) {
+	return buildScanOptionsWithRegions(
+		profile, region, strings.TrimSpace(region) != "",
+		nil,
+		sinceStr, maxEvents,
+		skipServiceLastAccessed,
+		includeServiceLinkedRoles,
+		includeSLRFlagSet,
+		ignoreFile, scpFile, configPath, outDir, format, failOn,
+	)
+}
+
+func buildScanOptionsWithRegions(
+	profile, region string,
+	regionFlagSet bool,
+	regionsFlag []string,
+	sinceStr string,
 	maxEvents int,
 	skipServiceLastAccessed bool,
 	includeServiceLinkedRoles bool,
@@ -352,9 +427,9 @@ func buildScanOptions(
 		return nil, fmt.Errorf("invalid --fail-on: %w", err)
 	}
 
-	resolvedRegion := strings.TrimSpace(region)
-	if resolvedRegion == "" {
-		resolvedRegion = cfg.AWS.Region
+	resolvedRegion, resolvedRegions, err := resolveRegions(region, regionFlagSet, regionsFlag, cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	resolvedOutDir := strings.TrimSpace(outDir)
@@ -365,6 +440,7 @@ func buildScanOptions(
 	return &ScanOptions{
 		Profile:                   strings.TrimSpace(profile),
 		Region:                    resolvedRegion,
+		Regions:                   resolvedRegions,
 		Since:                     since,
 		SinceRaw:                  strings.TrimSpace(sinceStr),
 		MaxEvents:                 maxEvents,
@@ -378,4 +454,94 @@ func buildScanOptions(
 		Format:                    normFormat,
 		FailOn:                    normFailOn,
 	}, nil
+}
+
+func resolveRegions(regionFlag string, regionFlagSet bool, regionsFlag []string, cfg *config.Config) (string, []string, error) {
+	rawRegion := strings.ToLower(strings.TrimSpace(regionFlag))
+	if rawRegion != "" && !awsRegionPattern.MatchString(rawRegion) {
+		return "", nil, fmt.Errorf("invalid --region %q (expected AWS region like us-east-1)", regionFlag)
+	}
+
+	// 1. Explicit --regions flag takes precedence for multi-region CloudTrail lookup.
+	if len(regionsFlag) > 0 {
+		expanded, err := expandAndValidateRegions(regionsFlag)
+		if err != nil {
+			return "", nil, err
+		}
+		if regionFlagSet && rawRegion != "" {
+			if !containsString(expanded, rawRegion) {
+				expanded = append([]string{rawRegion}, expanded...)
+			}
+			return rawRegion, expanded, nil
+		}
+		return expanded[0], expanded, nil
+	}
+
+	// 2. Explicit --region flag targets a single region (overrides aws.regions in config).
+	if regionFlagSet && rawRegion != "" {
+		return rawRegion, []string{rawRegion}, nil
+	}
+
+	// 3. Fallback to aws.regions in nhilens.yaml if configured.
+	if cfg != nil && len(cfg.AWS.Regions) > 0 {
+		expanded, err := expandAndValidateRegions(cfg.AWS.Regions)
+		if err != nil {
+			return "", nil, fmt.Errorf("invalid aws.regions in config: %w", err)
+		}
+		return expanded[0], expanded, nil
+	}
+
+	// 4. Default to aws.region from config (or us-east-1).
+	primary := rawRegion
+	if primary == "" && cfg != nil {
+		primary = strings.ToLower(strings.TrimSpace(cfg.AWS.Region))
+	}
+	if primary == "" {
+		primary = "us-east-1"
+	}
+	return primary, []string{primary}, nil
+}
+
+func expandAndValidateRegions(raw []string) ([]string, error) {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(raw))
+	add := func(r string) {
+		if _, ok := seen[r]; ok {
+			return
+		}
+		seen[r] = struct{}{}
+		out = append(out, r)
+	}
+
+	for _, entry := range raw {
+		for _, part := range strings.Split(entry, ",") {
+			tok := strings.ToLower(strings.TrimSpace(part))
+			if tok == "" {
+				continue
+			}
+			if tok == "all" {
+				for _, defReg := range collect.DefaultEnabledAWSRegions {
+					add(defReg)
+				}
+				continue
+			}
+			if !awsRegionPattern.MatchString(tok) {
+				return nil, fmt.Errorf("invalid region %q in --regions (expected AWS region like us-east-1 or 'all')", part)
+			}
+			add(tok)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("invalid --regions: must specify at least one AWS region or 'all'")
+	}
+	return out, nil
+}
+
+func containsString(list []string, target string) bool {
+	for _, s := range list {
+		if s == target {
+			return true
+		}
+	}
+	return false
 }

@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -30,12 +31,15 @@ const (
 	maxUserAgentLen = 120
 	// maxActivityTopItems caps top services and top APIs stored in Activity30d.
 	maxActivityTopItems = 5
+	// defaultCloudTrailConcurrency bounds simultaneous regional LookupEvents workers.
+	defaultCloudTrailConcurrency = 5
 )
 
 // CloudTrailOptions configures read-only CloudTrail LookupEvents attribution.
 type CloudTrailOptions struct {
 	Since              time.Duration
-	MaxEvents          int
+	MaxEvents          int // Per-region event cap (0 disables CloudTrail lookup).
+	MaxConcurrency     int
 	Retry              RetryPolicy
 	MinRequestInterval time.Duration
 	Sleep              func(ctx context.Context, d time.Duration) error
@@ -46,6 +50,9 @@ func (o CloudTrailOptions) normalize() CloudTrailOptions {
 	out := o
 	if out.Since <= 0 {
 		out.Since = maxCloudTrailHistoryWindow
+	}
+	if out.MaxConcurrency <= 0 {
+		out.MaxConcurrency = defaultCloudTrailConcurrency
 	}
 	out.Retry = out.Retry.normalize()
 	// CloudTrail LookupEvents is rate-limited to 2 requests/second per account per region.
@@ -64,13 +71,19 @@ func (o CloudTrailOptions) normalize() CloudTrailOptions {
 	return out
 }
 
+// RegionCloudTrailClient pairs an AWS region identifier with its regional CloudTrail client.
+type RegionCloudTrailClient struct {
+	Region string
+	Client CloudTrailClient
+}
+
 // CloudTrailCollector enriches normalized identities with best-effort CloudTrail management event attribution.
 type CloudTrailCollector struct {
 	client CloudTrailClient
 	opts   CloudTrailOptions
 }
 
-// NewCloudTrailCollector constructs a CloudTrail attribution collector.
+// NewCloudTrailCollector constructs a single-region CloudTrail attribution collector.
 func NewCloudTrailCollector(client CloudTrailClient, opts CloudTrailOptions) *CloudTrailCollector {
 	return &CloudTrailCollector{
 		client: client,
@@ -109,14 +122,45 @@ type identityTrailAcc struct {
 	apis30d     map[string]int
 }
 
-// Enrich queries CloudTrail management events and attributes valid source IPs, userAgent traces,
-// 30-day top service/API summaries, recent actions, and fresher last-used timestamps to matching identities.
+type regionFetchResult struct {
+	coverage model.RegionCloudTrailCoverage
+	events   []cttypes.Event
+	warnings []string
+}
+
+// Enrich queries CloudTrail management events for the scan's primary region and attributes valid
+// source IPs, userAgent traces, 30-day top service/API summaries, recent actions, and fresher
+// last-used timestamps to matching identities.
 //
 // Errors (such as AccessDeniedException) degrade gracefully to CloudTrailStatusUnknown with a
 // non-fatal warning so IAM auditing still completes cleanly.
 func (c *CloudTrailCollector) Enrich(ctx context.Context, run *model.ScanRun) {
 	if run == nil {
 		return
+	}
+	EnrichRegions(ctx, []RegionCloudTrailClient{{Region: run.Region, Client: c.client}}, c.opts, run)
+}
+
+// EnrichRegions queries CloudTrail management events concurrently across one or more AWS regions
+// (each pacing its own per-region 2 req/s AWS rate limit independently) and merges source IPs,
+// userAgent traces, 30-day activity, recent actions, and last-used timestamps onto each identity.
+// Events are deduplicated by EventId when present so cross-region/global events are never double-counted.
+func EnrichRegions(ctx context.Context, clients []RegionCloudTrailClient, opts CloudTrailOptions, run *model.ScanRun) {
+	if run == nil {
+		return
+	}
+	normOpts := opts.normalize()
+
+	if len(clients) == 0 {
+		clients = []RegionCloudTrailClient{{Region: run.Region, Client: nil}}
+	}
+
+	regionsScanned := make([]string, 0, len(clients))
+	for _, rc := range clients {
+		reg := strings.TrimSpace(rc.Region)
+		if reg != "" {
+			regionsScanned = append(regionsScanned, reg)
+		}
 	}
 
 	if run.Coverage == nil {
@@ -126,27 +170,73 @@ func (c *CloudTrailCollector) Enrich(ctx context.Context, run *model.ScanRun) {
 			SinceWindow: run.SinceWindow,
 		}
 	}
-	run.Coverage.CloudTrailEventLimit = c.opts.MaxEvents
+	run.Coverage.CloudTrailEventLimit = normOpts.MaxEvents
+	if len(regionsScanned) > 0 {
+		run.Regions = regionsScanned
+		run.Coverage.RegionsScanned = regionsScanned
+		if strings.TrimSpace(run.Region) == "" {
+			run.Region = regionsScanned[0]
+			run.Coverage.Region = regionsScanned[0]
+		}
+	}
 
-	if c.opts.MaxEvents == 0 {
+	if normOpts.MaxEvents == 0 {
 		setCloudTrailStatus(run, model.CloudTrailStatusDisabled)
 		run.Coverage.CloudTrailStatus = model.CloudTrailStatusDisabled
-		return
-	}
-	if c.client == nil {
-		setCloudTrailStatus(run, model.CloudTrailStatusUnknown)
-		run.Coverage.CloudTrailStatus = model.CloudTrailStatusUnknown
+		regionCovs := make([]model.RegionCloudTrailCoverage, 0, len(clients))
+		for _, rc := range clients {
+			regionCovs = append(regionCovs, model.RegionCloudTrailCoverage{
+				Region: rc.Region,
+				Status: model.CloudTrailStatusDisabled,
+			})
+		}
+		run.Coverage.CloudTrailRegions = regionCovs
 		return
 	}
 
-	now := c.opts.Now().UTC()
-	since := c.opts.Since
+	now := normOpts.Now().UTC()
+	since := normOpts.Since
 	if since > maxCloudTrailHistoryWindow {
 		since = maxCloudTrailHistoryWindow
 		run.Warnings = append(run.Warnings, "CloudTrail Event History retains up to 90 days; clamped --since window to 90d")
 	}
 	startTime := now.Add(-since)
 	cutoff30d := now.Add(-time.Duration(activitySummaryWindowDays) * 24 * time.Hour)
+
+	multiRegion := len(clients) > 1
+	results := make([]regionFetchResult, len(clients))
+
+	workers := min(normOpts.MaxConcurrency, len(clients))
+	if workers <= 1 {
+		for i, rc := range clients {
+			results[i] = fetchRegionEvents(ctx, rc, normOpts, startTime, now, multiRegion)
+		}
+	} else {
+		sem := make(chan struct{}, workers)
+		var wg sync.WaitGroup
+		for i, rc := range clients {
+			wg.Add(1)
+			go func(idx int, rc RegionCloudTrailClient) {
+				defer wg.Done()
+				select {
+				case sem <- struct{}{}:
+				case <-ctx.Done():
+					results[idx] = regionFetchResult{
+						coverage: model.RegionCloudTrailCoverage{
+							Region: rc.Region,
+							Status: model.CloudTrailStatusUnknown,
+							Error:  ctx.Err().Error(),
+						},
+						warnings: []string{formatRegionWarning(rc.Region, multiRegion, fmt.Sprintf("CloudTrail lookup interrupted: %v", ctx.Err()))},
+					}
+					return
+				}
+				defer func() { <-sem }()
+				results[idx] = fetchRegionEvents(ctx, rc, normOpts, startTime, now, multiRegion)
+			}(i, rc)
+		}
+		wg.Wait()
+	}
 
 	roleByARN := make(map[string]int)
 	roleByName := make(map[string]int)
@@ -187,71 +277,54 @@ func (c *CloudTrailCollector) Enrich(ctx context.Context, run *model.ScanRun) {
 	}
 
 	var (
-		nextToken *string
-		fetched   int
-		status    = model.CloudTrailStatusOK
-		truncated bool
-		pageNum   int
+		totalFetched int
+		okCount      int
+		unknownCount int
+		anyTruncated bool
+		seenEventIDs = make(map[string]struct{})
+		regionCovs   = make([]model.RegionCloudTrailCoverage, 0, len(results))
 	)
 
-	for fetched < c.opts.MaxEvents {
-		if ctx.Err() != nil {
-			status = partialOrUnknown(fetched)
-			run.Warnings = append(run.Warnings, fmt.Sprintf("CloudTrail lookup interrupted: %v", ctx.Err()))
-			break
+	for _, res := range results {
+		regionCovs = append(regionCovs, res.coverage)
+		run.Warnings = append(run.Warnings, res.warnings...)
+		if res.coverage.Truncated {
+			anyTruncated = true
+		}
+		switch res.coverage.Status {
+		case model.CloudTrailStatusOK:
+			okCount++
+		case model.CloudTrailStatusUnknown:
+			unknownCount++
 		}
 
-		if pageNum > 0 && c.opts.MinRequestInterval > 0 {
-			if err := c.opts.Sleep(ctx, c.opts.MinRequestInterval); err != nil {
-				status = partialOrUnknown(fetched)
-				run.Warnings = append(run.Warnings, fmt.Sprintf("CloudTrail lookup interrupted during rate-limit pacing: %v", err))
-				break
+		for _, ev := range res.events {
+			if evID := strings.TrimSpace(aws.ToString(ev.EventId)); evID != "" {
+				if _, dup := seenEventIDs[evID]; dup {
+					continue
+				}
+				seenEventIDs[evID] = struct{}{}
 			}
-		}
-		pageNum++
-
-		remaining := c.opts.MaxEvents - fetched
-		pageSize := int32(min(remaining, maxCloudTrailPageSize))
-
-		out, err := DoWithRetry(ctx, c.opts.Retry, func(ctx context.Context) (*cloudtrail.LookupEventsOutput, error) {
-			return c.client.LookupEvents(ctx, &cloudtrail.LookupEventsInput{
-				StartTime:  &startTime,
-				EndTime:    &now,
-				MaxResults: aws.Int32(pageSize),
-				NextToken:  nextToken,
-			})
-		})
-		if err != nil {
-			status = partialOrUnknown(fetched)
-			run.Warnings = append(run.Warnings, fmt.Sprintf("CloudTrail LookupEvents failed (status=%s): %v", status, err))
-			break
-		}
-
-		for _, ev := range out.Events {
-			if fetched >= c.opts.MaxEvents {
-				break
-			}
-			fetched++
+			totalFetched++
 			attributeEvent(ev, cutoff30d, roleByARN, roleByName, userByARN, keyByID, getAcc)
 		}
-
-		if out.NextToken == nil || aws.ToString(out.NextToken) == "" {
-			break
-		}
-		if fetched >= c.opts.MaxEvents {
-			status = model.CloudTrailStatusPartial
-			truncated = true
-			run.Warnings = append(run.Warnings, fmt.Sprintf("CloudTrail lookup reached --max-events=%d cap; attribution may be incomplete", c.opts.MaxEvents))
-			break
-		}
-		nextToken = out.NextToken
 	}
 
-	run.CloudTrailEventCount = fetched
+	status := model.CloudTrailStatusPartial
+	switch {
+	case len(results) == 0 || unknownCount == len(results):
+		status = model.CloudTrailStatusUnknown
+	case okCount == len(results):
+		status = model.CloudTrailStatusOK
+	}
+
+	run.CloudTrailEventCount = totalFetched
 	setCloudTrailStatus(run, status)
 	run.Coverage.CloudTrailStatus = status
-	run.Coverage.CloudTrailEventsAnalyzed = fetched
-	run.Coverage.CloudTrailTruncated = truncated
+	run.Coverage.CloudTrailEventsAnalyzed = totalFetched
+	run.Coverage.CloudTrailTruncated = anyTruncated
+	run.Coverage.CloudTrailRegions = regionCovs
+
 	if status == model.CloudTrailStatusPartial || status == model.CloudTrailStatusUnknown {
 		gap := "cloudtrail_" + status
 		for i := range run.Identities {
@@ -298,6 +371,108 @@ func (c *CloudTrailCollector) Enrich(ctx context.Context, run *model.ScanRun) {
 	}
 
 	sort.Strings(run.Warnings)
+}
+
+func fetchRegionEvents(
+	ctx context.Context,
+	rc RegionCloudTrailClient,
+	opts CloudTrailOptions,
+	startTime, endTime time.Time,
+	multiRegion bool,
+) regionFetchResult {
+	if rc.Client == nil {
+		return regionFetchResult{
+			coverage: model.RegionCloudTrailCoverage{
+				Region: rc.Region,
+				Status: model.CloudTrailStatusUnknown,
+				Error:  "cloudtrail client unavailable",
+			},
+		}
+	}
+
+	var (
+		nextToken *string
+		events    []cttypes.Event
+		warnings  []string
+		status    = model.CloudTrailStatusOK
+		truncated bool
+		errMsg    string
+		pageNum   int
+	)
+
+	for len(events) < opts.MaxEvents {
+		if ctx.Err() != nil {
+			status = partialOrUnknown(len(events))
+			errMsg = ctx.Err().Error()
+			warnings = append(warnings, formatRegionWarning(rc.Region, multiRegion, fmt.Sprintf("CloudTrail lookup interrupted: %v", ctx.Err())))
+			break
+		}
+
+		if pageNum > 0 && opts.MinRequestInterval > 0 {
+			if err := opts.Sleep(ctx, opts.MinRequestInterval); err != nil {
+				status = partialOrUnknown(len(events))
+				errMsg = err.Error()
+				warnings = append(warnings, formatRegionWarning(rc.Region, multiRegion, fmt.Sprintf("CloudTrail lookup interrupted during rate-limit pacing: %v", err)))
+				break
+			}
+		}
+		pageNum++
+
+		remaining := opts.MaxEvents - len(events)
+		pageSize := int32(min(remaining, maxCloudTrailPageSize))
+
+		out, err := DoWithRetry(ctx, opts.Retry, func(ctx context.Context) (*cloudtrail.LookupEventsOutput, error) {
+			return rc.Client.LookupEvents(ctx, &cloudtrail.LookupEventsInput{
+				StartTime:  &startTime,
+				EndTime:    &endTime,
+				MaxResults: aws.Int32(pageSize),
+				NextToken:  nextToken,
+			})
+		})
+		if err != nil {
+			status = partialOrUnknown(len(events))
+			errMsg = err.Error()
+			warnings = append(warnings, formatRegionWarning(rc.Region, multiRegion, fmt.Sprintf("CloudTrail LookupEvents failed (status=%s): %v", status, err)))
+			break
+		}
+
+		for _, ev := range out.Events {
+			if len(events) >= opts.MaxEvents {
+				break
+			}
+			events = append(events, ev)
+		}
+
+		if out.NextToken == nil || aws.ToString(out.NextToken) == "" {
+			break
+		}
+		if len(events) >= opts.MaxEvents {
+			status = model.CloudTrailStatusPartial
+			truncated = true
+			warnings = append(warnings, formatRegionWarning(rc.Region, multiRegion, fmt.Sprintf("CloudTrail lookup reached --max-events=%d cap; attribution may be incomplete", opts.MaxEvents)))
+			break
+		}
+		nextToken = out.NextToken
+	}
+
+	return regionFetchResult{
+		coverage: model.RegionCloudTrailCoverage{
+			Region:         rc.Region,
+			Status:         status,
+			EventsAnalyzed: len(events),
+			Truncated:      truncated,
+			Error:          errMsg,
+		},
+		events:   events,
+		warnings: warnings,
+	}
+}
+
+func formatRegionWarning(region string, multiRegion bool, msg string) string {
+	if multiRegion && strings.TrimSpace(region) != "" {
+		return fmt.Sprintf("[%s] %s", region, msg)
+	}
+	return msg
 }
 
 func attributeEvent(

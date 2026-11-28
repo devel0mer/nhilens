@@ -25,7 +25,11 @@ func WriteMarkdown(w io.Writer, run *model.ScanRun) error {
 
 	_, _ = fmt.Fprintf(w, "## Summary\n\n")
 	_, _ = fmt.Fprintf(w, "| Metric | Value |\n|---|---|\n")
-	_, _ = fmt.Fprintf(w, "| Account / Region | `%s` (`%s`) |\n", s.AccountID, s.Region)
+	if len(s.Regions) > 1 {
+		_, _ = fmt.Fprintf(w, "| Account / Regions | `%s` (`%s`) |\n", s.AccountID, strings.Join(s.Regions, "`, `"))
+	} else {
+		_, _ = fmt.Fprintf(w, "| Account / Region | `%s` (`%s`) |\n", s.AccountID, s.Region)
+	}
 	_, _ = fmt.Fprintf(w, "| Scan ID | `%s` |\n", s.ScanID)
 	_, _ = fmt.Fprintf(w, "| Identities | %d total (%d roles, %d users, %d keys; %d service-linked) |\n",
 		s.TotalIdentities, s.Roles, s.Users, s.Keys, s.ServiceLinkedRoles)
@@ -35,10 +39,14 @@ func WriteMarkdown(w io.Writer, run *model.ScanRun) error {
 	if run.SuppressedFindingCount > 0 {
 		_, _ = fmt.Fprintf(w, "| Suppressed Findings | %d (via baseline ignore file) |\n", run.SuppressedFindingCount)
 	}
-	if s.CloudTrailStatus == model.CloudTrailStatusDisabled {
+	switch {
+	case s.CloudTrailStatus == model.CloudTrailStatusDisabled:
 		_, _ = fmt.Fprintf(w, "| CloudTrail Attribution | `disabled` (skipped via `--max-events=0`) |\n\n")
 		_, _ = fmt.Fprintf(w, "> **CloudTrail disabled:** Lookup was skipped (`--max-events=0`). Agent `userAgent` traces, 30d activity, and R4 multi-IP key checks were not performed.\n\n")
-	} else {
+	case len(s.Regions) > 1:
+		_, _ = fmt.Fprintf(w, "| CloudTrail Attribution | `%s` (%d events, `%s` window, **%d regions aggregated**) |\n\n", s.CloudTrailStatus, s.CloudTrailEventCount, s.SinceWindow, len(s.Regions))
+		_, _ = fmt.Fprintf(w, "> **Multi-region CloudTrail scope:** CloudTrail `LookupEvents` aggregated across %d regions (`%s`). Activity in unqueried AWS regions is not included.\n\n", len(s.Regions), strings.Join(s.Regions, "`, `"))
+	default:
 		_, _ = fmt.Fprintf(w, "| CloudTrail Attribution | `%s` (%d events, `%s` window, **region `%s` only**) |\n\n", s.CloudTrailStatus, s.CloudTrailEventCount, s.SinceWindow, s.Region)
 		_, _ = fmt.Fprintf(w, "> **Single-region CloudTrail scope:** CloudTrail `LookupEvents` inspected region `%s` only. Agent `userAgent` traces, 30d activity, and R4 multi-IP key findings do not include activity in other AWS regions.\n\n", s.Region)
 	}
@@ -50,14 +58,36 @@ func WriteMarkdown(w io.Writer, run *model.ScanRun) error {
 	}
 	_, _ = fmt.Fprintf(w, "| Coverage Dimension | Details |\n|---|---|\n")
 	_, _ = fmt.Fprintf(w, "| Overall Status | **`%s`** (%d partial identity(ies), %d collection error(s)) |\n", cov.Status, cov.PartialIdentities, cov.CollectionErrorCount)
-	_, _ = fmt.Fprintf(w, "| Scope | Account `%s`, region `%s`, window `%s` |\n", cov.AccountID, cov.Region, cov.SinceWindow)
+	if len(cov.RegionsScanned) > 1 {
+		_, _ = fmt.Fprintf(w, "| Scope | Account `%s`, regions `%s`, window `%s` |\n", cov.AccountID, strings.Join(cov.RegionsScanned, "`, `"), cov.SinceWindow)
+	} else {
+		_, _ = fmt.Fprintf(w, "| Scope | Account `%s`, region `%s`, window `%s` |\n", cov.AccountID, cov.Region, cov.SinceWindow)
+	}
 	ctLim := "unlimited"
 	if cov.CloudTrailEventLimit > 0 {
-		ctLim = fmt.Sprintf("max %d events (truncated=%t)", cov.CloudTrailEventLimit, cov.CloudTrailTruncated)
+		if len(cov.RegionsScanned) > 1 {
+			ctLim = fmt.Sprintf("max %d events/region (truncated=%t)", cov.CloudTrailEventLimit, cov.CloudTrailTruncated)
+		} else {
+			ctLim = fmt.Sprintf("max %d events (truncated=%t)", cov.CloudTrailEventLimit, cov.CloudTrailTruncated)
+		}
 	} else if cov.CloudTrailStatus == model.CloudTrailStatusDisabled {
 		ctLim = "disabled (--max-events=0)"
 	}
 	_, _ = fmt.Fprintf(w, "| CloudTrail | `%s` — %d event(s) analyzed (%s) |\n", cov.CloudTrailStatus, cov.CloudTrailEventsAnalyzed, ctLim)
+	if len(cov.CloudTrailRegions) > 1 {
+		regParts := make([]string, 0, len(cov.CloudTrailRegions))
+		for _, rc := range cov.CloudTrailRegions {
+			switch {
+			case rc.Error != "":
+				regParts = append(regParts, fmt.Sprintf("`%s`: %s (%d, err)", rc.Region, rc.Status, rc.EventsAnalyzed))
+			case rc.Truncated:
+				regParts = append(regParts, fmt.Sprintf("`%s`: %s (%d, capped)", rc.Region, rc.Status, rc.EventsAnalyzed))
+			default:
+				regParts = append(regParts, fmt.Sprintf("`%s`: %s (%d)", rc.Region, rc.Status, rc.EventsAnalyzed))
+			}
+		}
+		_, _ = fmt.Fprintf(w, "| CloudTrail per Region | %s |\n", strings.Join(regParts, " · "))
+	}
 	_, _ = fmt.Fprintf(w, "| IAM Login Profiles | %d checked, %d failed |\n", cov.LoginProfileChecked, cov.LoginProfileFailed)
 	if cov.AccessAdvisorSkipped {
 		_, _ = fmt.Fprintf(w, "| Access Advisor (R2) | skipped (`--skip-service-last-accessed`) |\n")

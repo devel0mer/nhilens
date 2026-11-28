@@ -155,14 +155,22 @@ func WriteSARIF(w io.Writer, run *model.ScanRun) error {
 	}
 
 	notifications := make([]sarifNotification, 0, len(run.Warnings)+1)
+	regions := run.EffectiveRegions()
 	ctScope := "single-region"
-	if run.CloudTrailStatus == model.CloudTrailStatusDisabled {
+	switch {
+	case run.CloudTrailStatus == model.CloudTrailStatusDisabled:
 		ctScope = "disabled"
 		notifications = append(notifications, sarifNotification{
 			Level:   "note",
 			Message: sarifMessage{Text: "CloudTrail lookup was disabled (--max-events=0); userAgent traces, 30d activity, and R4 multi-IP key checks were skipped."},
 		})
-	} else {
+	case len(regions) > 1:
+		ctScope = "multi-region"
+		notifications = append(notifications, sarifNotification{
+			Level:   "note",
+			Message: sarifMessage{Text: fmt.Sprintf("CloudTrail LookupEvents aggregated across %d regions (%s); activity in unqueried AWS regions is not included.", len(regions), strings.Join(regions, ", "))},
+		})
+	default:
 		regionLabel := strings.TrimSpace(run.Region)
 		if regionLabel == "" {
 			regionLabel = "default"
@@ -200,6 +208,7 @@ func WriteSARIF(w io.Writer, run *model.ScanRun) error {
 							"scan_id":          run.ID,
 							"account_id":       run.AccountID,
 							"region":           run.Region,
+							"regions":          regions,
 							"since_window":     run.SinceWindow,
 							"cloudtrail_scope": ctScope,
 							"scan_coverage":    data.Coverage,

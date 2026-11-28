@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -163,17 +164,17 @@ func TestScanEndToEndTableJSONSQLiteAndFailOn(t *testing.T) {
 	mockCT := &fakeCloudTrail{
 		events: []cttypes.Event{
 			{
-				EventTime:   &evTime,
-				EventName:   aws.String("ListBuckets"),
-				EventSource: aws.String("s3.amazonaws.com"),
-				AccessKeyId: aws.String("AKIAOLD1234567890123"),
+				EventTime:       &evTime,
+				EventName:       aws.String("ListBuckets"),
+				EventSource:     aws.String("s3.amazonaws.com"),
+				AccessKeyId:     aws.String("AKIAOLD1234567890123"),
 				CloudTrailEvent: aws.String(`{"eventSource":"s3.amazonaws.com","eventName":"ListBuckets","sourceIPAddress":"198.51.100.1","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::123456789012:user/ci-bot","accessKeyId":"AKIAOLD1234567890123"}}`),
 			},
 			{
-				EventTime:   &evTime,
-				EventName:   aws.String("GetCallerIdentity"),
-				EventSource: aws.String("sts.amazonaws.com"),
-				AccessKeyId: aws.String("AKIAOLD1234567890123"),
+				EventTime:       &evTime,
+				EventName:       aws.String("GetCallerIdentity"),
+				EventSource:     aws.String("sts.amazonaws.com"),
+				AccessKeyId:     aws.String("AKIAOLD1234567890123"),
 				CloudTrailEvent: aws.String(`{"eventSource":"sts.amazonaws.com","eventName":"GetCallerIdentity","sourceIPAddress":"203.0.113.9","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::123456789012:user/ci-bot","accessKeyId":"AKIAOLD1234567890123"}}`),
 			},
 		},
@@ -267,6 +268,119 @@ func TestScanEndToEndTableJSONSQLiteAndFailOn(t *testing.T) {
 	for _, f := range decoded.Identities[0].Findings {
 		if f.RuleID == "R2" {
 			t.Errorf("expected R2 skipped when --skip-service-last-accessed is set")
+		}
+	}
+}
+
+func TestScanMultiRegionCrossRegionR4AndReportsEndToEnd(t *testing.T) {
+	now := time.Date(2026, 11, 28, 12, 0, 0, 0, time.UTC)
+	evTime := now.Add(-1 * time.Hour)
+	mockIAM := buildFixtureMockIAM(now)
+
+	// Neither region alone has 2 distinct IPs for AKIAOLD1234567890123 —
+	// only multi-region CloudTrail aggregation triggers R4 (stale-or-shared-key)!
+	usEastCT := &fakeCloudTrail{
+		events: []cttypes.Event{
+			{
+				EventId:         aws.String("us-ev-1"),
+				EventTime:       &evTime,
+				EventName:       aws.String("ListBuckets"),
+				EventSource:     aws.String("s3.amazonaws.com"),
+				AccessKeyId:     aws.String("AKIAOLD1234567890123"),
+				CloudTrailEvent: aws.String(`{"eventSource":"s3.amazonaws.com","eventName":"ListBuckets","sourceIPAddress":"198.51.100.1","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::123456789012:user/ci-bot","accessKeyId":"AKIAOLD1234567890123"}}`),
+			},
+		},
+	}
+	euWestCT := &fakeCloudTrail{
+		events: []cttypes.Event{
+			{
+				EventId:         aws.String("eu-ev-1"),
+				EventTime:       &evTime,
+				EventName:       aws.String("GetCallerIdentity"),
+				EventSource:     aws.String("sts.amazonaws.com"),
+				AccessKeyId:     aws.String("AKIAOLD1234567890123"),
+				CloudTrailEvent: aws.String(`{"eventSource":"sts.amazonaws.com","eventName":"GetCallerIdentity","sourceIPAddress":"203.0.113.9","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::123456789012:user/ci-bot","accessKeyId":"AKIAOLD1234567890123"}}`),
+			},
+			{
+				EventId:         aws.String("eu-ev-2"),
+				EventTime:       &evTime,
+				EventName:       aws.String("InvokeModel"),
+				EventSource:     aws.String("bedrock.amazonaws.com"),
+				CloudTrailEvent: aws.String(`{"eventSource":"bedrock.amazonaws.com","eventName":"InvokeModel","userAgent":"langchain-aws/0.2.1 Boto3/1.35.0","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::123456789012:assumed-role/bedrock-support-agent/s1","sessionContext":{"sessionIssuer":{"type":"Role","arn":"arn:aws:iam::123456789012:role/bedrock-support-agent"}}}}`),
+			},
+		},
+	}
+
+	deps := ScanDeps{
+		NewClients: func(_ context.Context, _, region string) (collect.STSClient, collect.IAMClient, collect.CloudTrailClient, error) {
+			if region != "us-east-1" {
+				t.Errorf("expected primary region us-east-1 in NewClients, got %q", region)
+			}
+			return &fakeSTS{account: "123456789012", arn: "arn:aws:iam::123456789012:role/nhilens-ro"}, mockIAM, usEastCT, nil
+		},
+		NewCloudTrailClient: func(_ context.Context, _, region string) (collect.CloudTrailClient, error) {
+			if region == "eu-west-1" {
+				return euWestCT, nil
+			}
+			return &fakeCloudTrail{}, nil
+		},
+		Now: func() time.Time { return now },
+		CollectorHooks: func(opts *collect.Options) {
+			opts.Sleep = func(_ context.Context, _ time.Duration) error { return nil }
+		},
+		CloudTrailHooks: func(opts *collect.CloudTrailOptions) {
+			opts.MinRequestInterval = -1
+			opts.Sleep = func(_ context.Context, _ time.Duration) error { return nil }
+		},
+	}
+
+	outDir := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	code := ExecuteWithDeps(
+		[]string{"scan", "--regions", "us-east-1,eu-west-1", "--out", outDir},
+		&stdout, &stderr, deps,
+	)
+	if code != 0 {
+		t.Fatalf("multi-region scan failed (code=%d): %s", code, stderr.String())
+	}
+
+	tableOut := stdout.String()
+	for _, want := range []string{
+		"regions: us-east-1, eu-west-1",
+		"across 2 regions",
+		"us-east-1=1, eu-west-1=2",
+		"R4(high)",
+		"aggregated across 2 regions (us-east-1, eu-west-1)",
+	} {
+		if !strings.Contains(tableOut, want) {
+			t.Errorf("expected multi-region CLI output to contain %q, got:\n%s", want, tableOut)
+		}
+	}
+
+	// Verify SQLite reload preserves multi-region scope into HTML, Markdown, and SARIF reports.
+	dbPath := filepath.Join(outDir, "nhilens.db")
+	for _, tc := range []struct {
+		format string
+		want   []string
+	}{
+		{"html", []string{"Multi-region CloudTrail scope:", "us-east-1, eu-west-1", "2 regions"}},
+		{"markdown", []string{"Multi-region CloudTrail scope:", "CloudTrail per Region", "`eu-west-1`: ok (2)"}},
+		{"sarif", []string{`"cloudtrail_scope": "multi-region"`, `"eu-west-1"`}},
+	} {
+		repFile := filepath.Join(outDir, "multi."+tc.format)
+		var rOut, rErr bytes.Buffer
+		if rc := Execute([]string{"report", "--in", dbPath, "--out", repFile, "--format", tc.format}, &rOut, &rErr); rc != 0 {
+			t.Fatalf("report --format %s failed (code=%d): %s", tc.format, rc, rErr.String())
+		}
+		raw, err := os.ReadFile(repFile)
+		if err != nil {
+			t.Fatalf("read %s: %v", repFile, err)
+		}
+		content := string(raw)
+		for _, w := range tc.want {
+			if !strings.Contains(content, w) {
+				t.Errorf("multi-region %s report missing %q", tc.format, w)
+			}
 		}
 	}
 }

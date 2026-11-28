@@ -29,6 +29,7 @@ type SummaryStats struct {
 	AccountID            string    `json:"account_id"`
 	CallerARN            string    `json:"caller_arn"`
 	Region               string    `json:"region"`
+	Regions              []string  `json:"regions,omitempty"`
 	Profile              string    `json:"profile,omitempty"`
 	StartedAt            time.Time `json:"started_at"`
 	CompletedAt          time.Time `json:"completed_at"`
@@ -194,6 +195,7 @@ func Build(run *model.ScanRun, generatedAt time.Time) *ReportData {
 		AccountID:            run.AccountID,
 		CallerARN:            run.CallerARN,
 		Region:               run.Region,
+		Regions:              run.EffectiveRegions(),
 		Profile:              run.Profile,
 		StartedAt:            run.StartedAt,
 		CompletedAt:          run.CompletedAt,
@@ -281,6 +283,9 @@ func resolveScanCoverage(run *model.ScanRun, summary SummaryStats) model.ScanCov
 		if cov.Region == "" {
 			cov.Region = run.Region
 		}
+		if len(cov.RegionsScanned) == 0 {
+			cov.RegionsScanned = run.EffectiveRegions()
+		}
 		if cov.SinceWindow == "" {
 			cov.SinceWindow = run.SinceWindow
 		}
@@ -297,6 +302,7 @@ func resolveScanCoverage(run *model.ScanRun, summary SummaryStats) model.ScanCov
 		Status:                     model.CoverageStatusComplete,
 		AccountID:                  run.AccountID,
 		Region:                     run.Region,
+		RegionsScanned:             run.EffectiveRegions(),
 		SinceWindow:                run.SinceWindow,
 		CloudTrailStatus:           run.CloudTrailStatus,
 		CloudTrailEventsAnalyzed:   run.CloudTrailEventCount,
@@ -437,8 +443,15 @@ func formatActivitySummary(a *model.ActivitySummary) string {
 }
 
 func defaultLimitations(run *model.ScanRun) []Limitation {
-	ctNote := fmt.Sprintf("CloudTrail LookupEvents is regional (queries only --region=%s): API calls made in other AWS regions—including cross-region key sharing (R4) and userAgent/30d signals—are not visible unless scanned per region. LookupEvents inspects management events only (not S3/Lambda data events), is retained for at most 90 days in Event History, and is subject to --max-events caps. Multi-IP key detection (R4) is best-effort (NAT gateways, proxies, or ephemeral runners can emit multiple IPs). Current scan CloudTrail status: %s (%d events analyzed).",
-		run.Region, run.CloudTrailStatus, run.CloudTrailEventCount)
+	regions := run.EffectiveRegions()
+	var ctNote string
+	if len(regions) > 1 {
+		ctNote = fmt.Sprintf("CloudTrail LookupEvents was aggregated across %d AWS regions (%s): API calls made in unqueried regions—including cross-region key sharing (R4) and userAgent/30d signals—are not visible. LookupEvents inspects management events only (not S3/Lambda data events), is retained for at most 90 days in Event History, and is subject to per-region --max-events caps. Multi-IP key detection (R4) is best-effort (NAT gateways, proxies, or ephemeral runners can emit multiple IPs). Current scan CloudTrail status: %s (%d events analyzed).",
+			len(regions), strings.Join(regions, ", "), run.CloudTrailStatus, run.CloudTrailEventCount)
+	} else {
+		ctNote = fmt.Sprintf("CloudTrail LookupEvents is regional (queries only --region=%s): API calls made in other AWS regions—including cross-region key sharing (R4) and userAgent/30d signals—are not visible unless scanned with --regions. LookupEvents inspects management events only (not S3/Lambda data events), is retained for at most 90 days in Event History, and is subject to --max-events caps. Multi-IP key detection (R4) is best-effort (NAT gateways, proxies, or ephemeral runners can emit multiple IPs). Current scan CloudTrail status: %s (%d events analyzed).",
+			run.Region, run.CloudTrailStatus, run.CloudTrailEventCount)
+	}
 
 	return []Limitation{
 		{

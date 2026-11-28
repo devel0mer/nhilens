@@ -16,6 +16,10 @@ nhilens demo --no-write --format sarif
 # Scan an AWS account (strictly read-only), persist to SQLite, and print a ranked table
 nhilens scan --profile sandbox --region us-east-1 --since 90d --out ./nhilens-out
 
+# Multi-region CloudTrail aggregation (catches cross-region R4 shared keys & AI userAgent traces)
+nhilens scan --profile sandbox --regions us-east-1,us-west-2,eu-west-1 --since 90d --out ./nhilens-out
+nhilens scan --profile sandbox --regions all --since 30d --out ./nhilens-out
+
 # Emit SARIF 2.1.0 for GitHub Code Scanning + CI gate (exit code 2 on high/critical)
 nhilens scan --profile sandbox --region us-east-1 --format sarif --fail-on high --out ./nhilens-out > nhilens.sarif
 
@@ -51,9 +55,10 @@ nhilens explain R6
 | `demo` | `--format` | `table` | Console output format (`table`, `json`, `sarif`, `markdown`, or `csv`) |
 | `demo` | `--no-write` | `false` | Print console output only without writing artifacts |
 | `scan` | `--profile` | *(chain)* | AWS shared config/credentials profile |
-| `scan` | `--region` | `us-east-1` / config | AWS region override (also scopes regional CloudTrail lookup) |
+| `scan` | `--region` | `us-east-1` / config | Primary AWS region override |
+| `scan` | `--regions` | *(single `--region`)* | Comma-separated AWS regions for parallel CloudTrail aggregation, or `all` for the 17 default-enabled AWS regions |
 | `scan` | `--since` | `90d` | CloudTrail lookback window (capped at AWS's 90d Event History limit) |
-| `scan` | `--max-events` | `5000` | Max CloudTrail management events to inspect (`0` disables CloudTrail lookup) |
+| `scan` | `--max-events` | `5000` | Max CloudTrail management events per region (`0` disables CloudTrail lookup) |
 | `scan` | `--skip-service-last-accessed` | `false` | Skip IAM Access Advisor jobs (faster on large accounts; skips R2) |
 | `scan` | `--include-service-linked-roles` | `false` | Evaluate risk rules against `/aws-service-role/` roles (excluded by default) |
 | `scan` | `--ignore` | *(none)* | Path to optional `.nhilens-ignore.yaml` baseline/suppression file ([example](nhilens-ignore.example.yaml)) |

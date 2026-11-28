@@ -67,33 +67,44 @@ const (
 	CoverageStatusPartial  = "partial"
 )
 
+// RegionCloudTrailCoverage records per-region CloudTrail LookupEvents coverage and errors.
+type RegionCloudTrailCoverage struct {
+	Region         string `json:"region"`
+	Status         string `json:"status"` // ok | partial | unknown | disabled
+	EventsAnalyzed int    `json:"events_analyzed"`
+	Truncated      bool   `json:"truncated,omitempty"`
+	Error          string `json:"error,omitempty"`
+}
+
 // ScanCoverage summarizes data completeness, scope, skipped checks, and collection errors
 // so partial scans are never mistaken for "zero findings".
 type ScanCoverage struct {
-	Status                       string   `json:"status"` // complete | partial
-	AccountID                    string   `json:"account_id"`
-	Region                       string   `json:"region"`
-	SinceWindow                  string   `json:"since_window"`
-	CloudTrailStatus             string   `json:"cloudtrail_status"`
-	CloudTrailEventsAnalyzed     int      `json:"cloudtrail_events_analyzed"`
-	CloudTrailEventLimit         int      `json:"cloudtrail_event_limit"`
-	CloudTrailTruncated          bool     `json:"cloudtrail_truncated,omitempty"`
-	LoginProfileChecked          int      `json:"login_profile_checked"`
-	LoginProfileFailed           int      `json:"login_profile_failed"`
-	AccessKeyListFailed          int      `json:"access_key_list_failed"`
-	AccessKeyLastUsedFailed      int      `json:"access_key_last_used_failed"`
-	AccessAdvisorSkipped         bool     `json:"access_advisor_skipped"`
-	AccessAdvisorAttempted       int      `json:"access_advisor_attempted"`
-	AccessAdvisorSucceeded       int      `json:"access_advisor_succeeded"`
-	AccessAdvisorFailed          int      `json:"access_advisor_failed"`
-	AccessAdvisorSkippedSLR      int      `json:"access_advisor_skipped_slr,omitempty"`
-	AccessAdvisorSkippedNoPolicy int      `json:"access_advisor_skipped_no_policy,omitempty"`
-	ServiceLinkedRolesExcluded   int      `json:"service_linked_roles_excluded"`
-	PolicyParseErrors            int      `json:"policy_parse_errors"`
-	SCPPoliciesLoaded            int      `json:"scp_policies_loaded"`
-	PartialIdentities            int      `json:"partial_identities"`
-	SkippedChecks                []string `json:"skipped_checks,omitempty"`
-	CollectionErrorCount         int      `json:"collection_error_count"`
+	Status                       string                     `json:"status"` // complete | partial
+	AccountID                    string                     `json:"account_id"`
+	Region                       string                     `json:"region"`
+	RegionsScanned               []string                   `json:"regions_scanned,omitempty"`
+	SinceWindow                  string                     `json:"since_window"`
+	CloudTrailStatus             string                     `json:"cloudtrail_status"`
+	CloudTrailEventsAnalyzed     int                        `json:"cloudtrail_events_analyzed"`
+	CloudTrailEventLimit         int                        `json:"cloudtrail_event_limit"`
+	CloudTrailTruncated          bool                       `json:"cloudtrail_truncated,omitempty"`
+	CloudTrailRegions            []RegionCloudTrailCoverage `json:"cloudtrail_regions,omitempty"`
+	LoginProfileChecked          int                        `json:"login_profile_checked"`
+	LoginProfileFailed           int                        `json:"login_profile_failed"`
+	AccessKeyListFailed          int                        `json:"access_key_list_failed"`
+	AccessKeyLastUsedFailed      int                        `json:"access_key_last_used_failed"`
+	AccessAdvisorSkipped         bool                       `json:"access_advisor_skipped"`
+	AccessAdvisorAttempted       int                        `json:"access_advisor_attempted"`
+	AccessAdvisorSucceeded       int                        `json:"access_advisor_succeeded"`
+	AccessAdvisorFailed          int                        `json:"access_advisor_failed"`
+	AccessAdvisorSkippedSLR      int                        `json:"access_advisor_skipped_slr,omitempty"`
+	AccessAdvisorSkippedNoPolicy int                        `json:"access_advisor_skipped_no_policy,omitempty"`
+	ServiceLinkedRolesExcluded   int                        `json:"service_linked_roles_excluded"`
+	PolicyParseErrors            int                        `json:"policy_parse_errors"`
+	SCPPoliciesLoaded            int                        `json:"scp_policies_loaded"`
+	PartialIdentities            int                        `json:"partial_identities"`
+	SkippedChecks                []string                   `json:"skipped_checks,omitempty"`
+	CollectionErrorCount         int                        `json:"collection_error_count"`
 }
 
 // ScanRun represents a single read-only audit run against an AWS account.
@@ -102,6 +113,7 @@ type ScanRun struct {
 	AccountID              string        `json:"account_id"`
 	CallerARN              string        `json:"caller_arn"`
 	Region                 string        `json:"region"`
+	Regions                []string      `json:"regions,omitempty"`
 	Profile                string        `json:"profile,omitempty"`
 	StartedAt              time.Time     `json:"started_at"`
 	CompletedAt            time.Time     `json:"completed_at"`
@@ -266,6 +278,23 @@ type ActivityCount struct {
 type ScoreContribution struct {
 	Source string  `json:"source"`
 	Points float64 `json:"points"`
+}
+
+// EffectiveRegions returns the deduplicated list of AWS regions covered by this scan.
+func (r *ScanRun) EffectiveRegions() []string {
+	if r == nil {
+		return nil
+	}
+	if len(r.Regions) > 0 {
+		return r.Regions
+	}
+	if r.Coverage != nil && len(r.Coverage.RegionsScanned) > 0 {
+		return r.Coverage.RegionsScanned
+	}
+	if reg := strings.TrimSpace(r.Region); reg != "" {
+		return []string{reg}
+	}
+	return nil
 }
 
 // AddDataGap records a unique, sorted data-collection gap on an identity and marks it partial.

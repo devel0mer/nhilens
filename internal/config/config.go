@@ -32,8 +32,9 @@ type Config struct {
 
 // AWSConfig configures default AWS SDK behavior.
 type AWSConfig struct {
-	Region         string `yaml:"region"`
-	MaxConcurrency int    `yaml:"max_concurrency"`
+	Region         string   `yaml:"region"`
+	Regions        []string `yaml:"regions"`
+	MaxConcurrency int      `yaml:"max_concurrency"`
 }
 
 // AgentDetectionConfig configures heuristic signals used to estimate AI agent likelihood.
@@ -294,6 +295,22 @@ func (c *Config) Validate() error {
 	}
 	if c.AWS.MaxConcurrency == 0 {
 		c.AWS.MaxConcurrency = 5
+	}
+	if len(c.AWS.Regions) > 0 {
+		seen := make(map[string]struct{}, len(c.AWS.Regions))
+		cleaned := make([]string, 0, len(c.AWS.Regions))
+		for _, r := range c.AWS.Regions {
+			trimmed := strings.ToLower(strings.TrimSpace(r))
+			if trimmed == "" {
+				continue
+			}
+			if _, ok := seen[trimmed]; ok {
+				continue
+			}
+			seen[trimmed] = struct{}{}
+			cleaned = append(cleaned, trimmed)
+		}
+		c.AWS.Regions = cleaned
 	}
 	if c.Rules.StaleDays <= 0 {
 		return fmt.Errorf("rules.stale_days must be > 0, got %d", c.Rules.StaleDays)

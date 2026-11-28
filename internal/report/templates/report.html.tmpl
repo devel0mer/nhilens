@@ -236,7 +236,7 @@
   <div class="tagline">Which AI agents and non-human identities are running in your AWS account — and what can they do?</div>
   <div class="subtitle">
     Account <span class="mono">{{.Report.Summary.AccountID}}</span> &middot;
-    Region <span class="mono">{{.Report.Summary.Region}}</span> &middot;
+    {{if gt (len .Report.Summary.Regions) 1}}Regions <span class="mono">{{join .Report.Summary.Regions ", "}}</span>{{else}}Region <span class="mono">{{.Report.Summary.Region}}</span>{{end}} &middot;
     Scan <span class="mono">{{.Report.Summary.ScanID}}</span> &middot;
     Scanned {{fmtTime .Report.Summary.StartedAt}}
   </div>
@@ -272,12 +272,16 @@
     <div class="card">
       <div class="label">CloudTrail Attribution</div>
       <div class="value" style="font-size:20px;text-transform:uppercase;">{{.Report.Summary.CloudTrailStatus}}</div>
-      <div class="sub">{{.Report.Summary.CloudTrailEventCount}} management events ({{.Report.Summary.SinceWindow}} &middot; <strong>{{.Report.Summary.Region}} only</strong>)</div>
+      <div class="sub">{{.Report.Summary.CloudTrailEventCount}} management events ({{.Report.Summary.SinceWindow}} &middot; <strong>{{if gt (len .Report.Summary.Regions) 1}}{{len .Report.Summary.Regions}} regions{{else}}{{.Report.Summary.Region}} only{{end}}</strong>)</div>
     </div>
   </div>
   {{if eq .Report.Summary.CloudTrailStatus "disabled"}}
   <div class="banner-scope">
     <strong>CloudTrail disabled:</strong> Lookup was skipped (<span class="mono">--max-events=0</span>). Agent <span class="mono">userAgent</span> traces, 30d activity, and R4 multi-IP key signals were not collected.
+  </div>
+  {{else if gt (len .Report.Summary.Regions) 1}}
+  <div class="banner-scope">
+    <strong>Multi-region CloudTrail scope:</strong> CloudTrail <span class="mono">LookupEvents</span> aggregated across {{len .Report.Summary.Regions}} regions (<span class="mono">{{join .Report.Summary.Regions ", "}}</span>). Activity in unqueried AWS regions is not included.
   </div>
   {{else}}
   <div class="banner-scope">
@@ -420,14 +424,21 @@
       <tbody>
         <tr>
           <th style="width:220px;">Account / Region / Window</th>
-          <td class="mono">{{.Report.Coverage.AccountID}} &middot; {{.Report.Coverage.Region}} (regional CloudTrail) &middot; {{.Report.Coverage.SinceWindow}}</td>
+          <td class="mono">{{.Report.Coverage.AccountID}} &middot; {{if gt (len .Report.Coverage.RegionsScanned) 1}}{{join .Report.Coverage.RegionsScanned ", "}} ({{len .Report.Coverage.RegionsScanned}} regions){{else}}{{.Report.Coverage.Region}} (regional CloudTrail){{end}} &middot; {{.Report.Coverage.SinceWindow}}</td>
         </tr>
         <tr>
           <th>CloudTrail Events</th>
           <td>
             <span class="badge sev-info">{{.Report.Coverage.CloudTrailStatus}}</span>
             {{.Report.Coverage.CloudTrailEventsAnalyzed}} analyzed
-            {{if gt .Report.Coverage.CloudTrailEventLimit 0}}(limit {{.Report.Coverage.CloudTrailEventLimit}}{{if .Report.Coverage.CloudTrailTruncated}}, <strong>truncated</strong>{{end}}){{end}}
+            {{if gt .Report.Coverage.CloudTrailEventLimit 0}}(limit {{.Report.Coverage.CloudTrailEventLimit}}{{if gt (len .Report.Coverage.RegionsScanned) 1}}/region{{end}}{{if .Report.Coverage.CloudTrailTruncated}}, <strong>truncated</strong>{{end}}){{end}}
+            {{if gt (len .Report.Coverage.CloudTrailRegions) 1}}
+            <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;">
+              {{range .Report.Coverage.CloudTrailRegions}}
+              <span class="badge {{if .Error}}sev-high{{else if .Truncated}}sev-medium{{else}}sev-clean{{end}} mono">{{.Region}}: {{.Status}} ({{.EventsAnalyzed}}{{if .Truncated}}, capped{{end}}{{if .Error}}, err{{end}})</span>
+              {{end}}
+            </div>
+            {{end}}
           </td>
         </tr>
         <tr>

@@ -370,6 +370,9 @@ func (s *Store) LoadScan(ctx context.Context, scanID string) (*model.ScanRun, er
 			return nil, fmt.Errorf("unmarshal coverage: %w", err)
 		}
 		run.Coverage = &cov
+		if len(cov.RegionsScanned) > 0 {
+			run.Regions = append([]string(nil), cov.RegionsScanned...)
+		}
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
