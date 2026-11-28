@@ -74,3 +74,72 @@ func TestDemoCommandOfflineArtifactsAndFormats(t *testing.T) {
 		t.Errorf("expected non-zero exit code for invalid demo --format")
 	}
 }
+
+func TestDemoOrgCommandProducesMultiAccountRollupAndReports(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "org-demo")
+	var stdout, stderr bytes.Buffer
+
+	if code := Execute([]string{"demo", "--org", "--out", outDir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("nhilens demo --org failed (code=%d): %s", code, stderr.String())
+	}
+
+	tableOut := stdout.String()
+	for _, want := range []string{
+		"o-demo987654",
+		"Account breakdown:",
+		"prod-ai",
+		"staging-ml",
+		"shared-platform",
+		"us-east-1, eu-west-1",
+		"aggregated across 2 regions",
+	} {
+		if !strings.Contains(tableOut, want) {
+			t.Errorf("expected demo --org table output to contain %q, got:\n%s", want, tableOut)
+		}
+	}
+
+	// Verify HTML report includes Account Breakdown and Account filter dropdown.
+	htmlBytes, err := os.ReadFile(filepath.Join(outDir, "report.html"))
+	if err != nil {
+		t.Fatalf("read org demo report.html: %v", err)
+	}
+	htmlStr := string(htmlBytes)
+	for _, want := range []string{
+		"Account Breakdown",
+		`id="tbl-account"`,
+		"prod-ai",
+		"staging-ml",
+		"shared-platform",
+		"Multi-region CloudTrail scope:",
+	} {
+		if !strings.Contains(htmlStr, want) {
+			t.Errorf("expected org demo HTML report to contain %q", want)
+		}
+	}
+
+	// Verify Markdown, SARIF, and CSV generated from the org SQLite DB preserve per-account attribution.
+	dbPath := filepath.Join(outDir, "nhilens.db")
+	for _, tc := range []struct {
+		format string
+		want   []string
+	}{
+		{"markdown", []string{"## Account Breakdown", "prod-ai", "staging-ml", "shared-platform"}},
+		{"sarif", []string{`"organization_id": "o-demo987654"`, `"account_name": "prod-ai"`, `"aws/iam/222233334444/`}},
+		{"csv", []string{"111122223333", "222233334444", "333344445555"}},
+	} {
+		repPath := filepath.Join(outDir, "org."+tc.format)
+		var rOut, rErr bytes.Buffer
+		if rc := Execute([]string{"report", "--in", dbPath, "--out", repPath, "--format", tc.format}, &rOut, &rErr); rc != 0 {
+			t.Fatalf("org report --format %s failed (code=%d): %s", tc.format, rc, rErr.String())
+		}
+		raw, err := os.ReadFile(repPath)
+		if err != nil {
+			t.Fatalf("read %s: %v", repPath, err)
+		}
+		for _, w := range tc.want {
+			if !strings.Contains(string(raw), w) {
+				t.Errorf("org %s report missing %q", tc.format, w)
+			}
+		}
+	}
+}

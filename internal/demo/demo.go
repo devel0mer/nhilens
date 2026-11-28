@@ -1,6 +1,8 @@
 package demo
 
 import (
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/devel0mer/nhilens/internal/config"
@@ -347,4 +349,169 @@ func BuildSyntheticRun() *model.ScanRun {
 	}
 
 	return run
+}
+
+// BuildSyntheticOrgRun builds a realistic 3-account, 2-region AWS Organizations
+// rollup scan (fake org o-demo987654, accounts prod-ai, staging-ml, shared-platform)
+// with zero AWS API calls. Powers `nhilens demo --org`.
+func BuildSyntheticOrgRun() *model.ScanRun {
+	base := BuildSyntheticRun()
+	now := base.StartedAt
+	cfg := config.Default()
+
+	// Partition the 12 realistic identities across 3 realistic AWS accounts:
+	//   - 111122223333 (prod-ai)
+	//   - 222233334444 (staging-ml) — includes an OU SCP capping staging-admin-agent's R1
+	//   - 333344445555 (shared-platform)
+	acctAssignments := map[string][2]string{
+		"mcp-ops-agent":               {"111122223333", "prod-ai"},
+		"bedrock-support-agent":       {"111122223333", "prod-ai"},
+		"lambda-doc-summarizer-agent": {"111122223333", "prod-ai"},
+		"ecs-billing-api":             {"111122223333", "prod-ai"},
+		"sagemaker-eval-runner":       {"222233334444", "staging-ml"},
+		"legacy-etl-worker":           {"222233334444", "staging-ml"},
+		"gh-wildcard-deploy":          {"333344445555", "shared-platform"},
+		"AKIAEXAMPLE111111111":        {"333344445555", "shared-platform"},
+		"ci-bot-user":                 {"333344445555", "shared-platform"},
+		"terraform-plan-reader":       {"333344445555", "shared-platform"},
+		"alice":                       {"333344445555", "shared-platform"},
+		"AWSServiceRoleForSupport":    {"333344445555", "shared-platform"},
+	}
+
+	identities := make([]model.Identity, 0, len(base.Identities))
+	for _, id := range base.Identities {
+		assign, ok := acctAssignments[id.Name]
+		if !ok {
+			assign = [2]string{"111122223333", "prod-ai"}
+		}
+		acctID, acctName := assign[0], assign[1]
+		id.Account = acctID
+		id.AccountName = acctName
+		id.ID = strings.ReplaceAll(id.ID, "111122223333", acctID)
+		id.ARN = strings.ReplaceAll(id.ARN, "111122223333", acctID)
+		id.PermissionsBoundaryARN = strings.ReplaceAll(id.PermissionsBoundaryARN, "111122223333", acctID)
+		id.TrustPolicyRaw = strings.ReplaceAll(id.TrustPolicyRaw, "111122223333", acctID)
+		if id.AccessKey != nil {
+			ak := *id.AccessKey
+			ak.ParentUserARN = strings.ReplaceAll(ak.ParentUserARN, "111122223333", acctID)
+			id.AccessKey = &ak
+		}
+		id.Findings = nil
+		id.ScoreContributions = nil
+		id.RiskScore = 0
+		id.RawRiskPoints = 0
+		id.ScoreExplanation = ""
+		identities = append(identities, id)
+	}
+
+	_ = policy.ParseAll(identities)
+	detect.ClassifyAll(identities, cfg)
+	rules.EvaluateAll(identities, cfg, now)
+	score.ScoreAll(identities, cfg)
+
+	// Re-sort deterministically across accounts by RiskScore DESC.
+	sort.Slice(identities, func(i, j int) bool {
+		if identities[i].RiskScore != identities[j].RiskScore {
+			return identities[i].RiskScore > identities[j].RiskScore
+		}
+		if len(identities[i].Findings) != len(identities[j].Findings) {
+			return len(identities[i].Findings) > len(identities[j].Findings)
+		}
+		if identities[i].Account != identities[j].Account {
+			return identities[i].Account < identities[j].Account
+		}
+		return identities[i].Name < identities[j].Name
+	})
+
+	summaries := buildAccountSummaries([]struct {
+		id, name string
+		scps     int
+	}{
+		{"111122223333", "prod-ai", 2},
+		{"222233334444", "staging-ml", 2},
+		{"333344445555", "shared-platform", 1},
+	}, identities)
+
+	regions := []string{"us-east-1", "eu-west-1"}
+	run := &model.ScanRun{
+		ID:                   "scan-o-demo987654-sample",
+		AccountID:            "org:o-demo987654",
+		OrganizationID:       "o-demo987654",
+		Accounts:             summaries,
+		CallerARN:            "arn:aws:iam::111122223333:role/nhilens-org-readonly",
+		Region:               "us-east-1",
+		Regions:              regions,
+		Profile:              "org-demo",
+		StartedAt:            now,
+		CompletedAt:          now.Add(14 * time.Second),
+		SinceWindow:          "90d",
+		CloudTrailStatus:     model.CloudTrailStatusOK,
+		CloudTrailEventCount: 542,
+		Identities:           identities,
+	}
+
+	for i := range run.Identities {
+		run.Identities[i].CoverageStatus = model.CoverageStatusComplete
+	}
+	run.Coverage = &model.ScanCoverage{
+		Status:                   model.CoverageStatusComplete,
+		AccountID:                run.AccountID,
+		OrganizationID:           run.OrganizationID,
+		AccountsScanned:          3,
+		AccountsFailed:           0,
+		AccountSummaries:         summaries,
+		Region:                   "us-east-1",
+		RegionsScanned:           regions,
+		SinceWindow:              "90d",
+		CloudTrailStatus:         model.CloudTrailStatusOK,
+		CloudTrailEventsAnalyzed: 542,
+		CloudTrailEventLimit:     5000,
+		CloudTrailRegions: []model.RegionCloudTrailCoverage{
+			{Region: "us-east-1", Status: model.CloudTrailStatusOK, EventsAnalyzed: 348},
+			{Region: "eu-west-1", Status: model.CloudTrailStatusOK, EventsAnalyzed: 194},
+		},
+		LoginProfileChecked:        2,
+		AccessAdvisorAttempted:     8,
+		AccessAdvisorSucceeded:     8,
+		AccessAdvisorSkippedSLR:    1,
+		SCPPoliciesLoaded:          5,
+		ServiceLinkedRolesExcluded: 1,
+		SkippedChecks:              []string{"1 AWS service-linked role(s) excluded by default"},
+	}
+
+	return run
+}
+
+func buildAccountSummaries(accts []struct {
+	id, name string
+	scps     int
+}, identities []model.Identity) []model.AccountScanSummary {
+	out := make([]model.AccountScanSummary, 0, len(accts))
+	for _, a := range accts {
+		var s model.AccountScanSummary
+		s.AccountID = a.id
+		s.AccountName = a.name
+		s.Status = "ok"
+		s.SCPCount = a.scps
+		for _, id := range identities {
+			if id.Account != a.id {
+				continue
+			}
+			s.Identities++
+			if id.AgentLikelihood == model.LikelihoodLikely {
+				s.AgentLikely++
+			}
+			for _, f := range id.Findings {
+				s.FindingsTotal++
+				switch f.Severity {
+				case model.SeverityCritical:
+					s.CriticalCount++
+				case model.SeverityHigh:
+					s.HighCount++
+				}
+			}
+		}
+		out = append(out, s)
+	}
+	return out
 }

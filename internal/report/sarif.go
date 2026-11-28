@@ -140,15 +140,19 @@ func WriteSARIF(w io.Writer, run *model.ScanRun) error {
 
 	results := make([]sarifResult, 0)
 	for _, ident := range run.Identities {
+		acctID := ident.Account
+		if acctID == "" {
+			acctID = run.AccountID
+		}
 		for _, f := range ident.Findings {
-			results = append(results, buildSARIFResult(run.AccountID, ident, f, nil))
+			results = append(results, buildSARIFResult(acctID, ident, f, nil))
 		}
 		for _, sf := range ident.SuppressedFindings {
 			just := sf.Reason
 			if sf.Expires != "" {
 				just = fmt.Sprintf("%s (expires: %s)", sf.Reason, sf.Expires)
 			}
-			results = append(results, buildSARIFResult(run.AccountID, ident, sf.Finding, []sarifSuppression{
+			results = append(results, buildSARIFResult(acctID, ident, sf.Finding, []sarifSuppression{
 				{Kind: "inSource", Justification: just},
 			}))
 		}
@@ -207,6 +211,9 @@ func WriteSARIF(w io.Writer, run *model.ScanRun) error {
 						Properties: map[string]any{
 							"scan_id":          run.ID,
 							"account_id":       run.AccountID,
+							"organization_id":  data.Summary.OrganizationID,
+							"accounts_scanned": data.Summary.AccountsScanned,
+							"accounts_failed":  data.Summary.AccountsFailed,
 							"region":           run.Region,
 							"regions":          regions,
 							"since_window":     run.SinceWindow,
@@ -263,6 +270,8 @@ func buildSARIFResult(accountID string, ident model.Identity, f model.Finding, s
 		},
 		Suppressions: supps,
 		Properties: map[string]any{
+			"account_id":       accountID,
+			"account_name":     ident.AccountName,
 			"identity_id":      ident.ID,
 			"identity_arn":     ident.ARN,
 			"identity_type":    string(ident.Type),

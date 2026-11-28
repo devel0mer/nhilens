@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/devel0mer/nhilens/internal/demo"
+	"github.com/devel0mer/nhilens/internal/model"
 	"github.com/devel0mer/nhilens/internal/report"
 	"github.com/devel0mer/nhilens/internal/store"
 	"github.com/spf13/cobra"
@@ -21,6 +22,7 @@ type DemoOptions struct {
 	HTMLOut string
 	Format  string
 	NoWrite bool
+	Org     bool
 }
 
 func newDemoCmd() *cobra.Command {
@@ -28,16 +30,18 @@ func newDemoCmd() *cobra.Command {
 		outDir  string
 		format  string
 		noWrite bool
+		org     bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "demo",
-		Short: "Run a 60-second offline demo on a synthetic AWS account (no AWS credentials needed)",
+		Short: "Run a 60-second offline demo on a synthetic AWS account or org (no AWS credentials needed)",
 		Long: `Run the full nhilens classification, risk rule evaluation (R1–R8), scoring,
 SQLite persistence, and offline HTML report pipeline on a realistic synthetic
-sandbox account (111122223333) with zero AWS API calls and zero credentials.`,
+sandbox account (111122223333) — or a 3-account, 2-region synthetic AWS
+Organization with --org — with zero AWS API calls and zero credentials.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts, err := buildDemoOptions(outDir, format, noWrite)
+			opts, err := buildDemoOptions(outDir, format, noWrite, org)
 			if err != nil {
 				return err
 			}
@@ -48,11 +52,12 @@ sandbox account (111122223333) with zero AWS API calls and zero credentials.`,
 	cmd.Flags().StringVar(&outDir, "out", "./nhilens-demo", "Output directory for the synthetic SQLite database and HTML report")
 	cmd.Flags().StringVar(&format, "format", "table", "Console output format: table, json, sarif, markdown, or csv")
 	cmd.Flags().BoolVar(&noWrite, "no-write", false, "Print console output only without writing nhilens.db or report.html")
+	cmd.Flags().BoolVar(&org, "org", false, "Simulate a 3-account, 2-region AWS Organizations rollup demo")
 
 	return cmd
 }
 
-func buildDemoOptions(outDir, format string, noWrite bool) (*DemoOptions, error) {
+func buildDemoOptions(outDir, format string, noWrite, org bool) (*DemoOptions, error) {
 	normFormat := strings.ToLower(strings.TrimSpace(format))
 	switch normFormat {
 	case "table", "json", "sarif", "markdown", "md", "csv":
@@ -74,6 +79,7 @@ func buildDemoOptions(outDir, format string, noWrite bool) (*DemoOptions, error)
 		HTMLOut: filepath.Join(resolvedOut, "report.html"),
 		Format:  normFormat,
 		NoWrite: noWrite,
+		Org:     org,
 	}, nil
 }
 
@@ -82,7 +88,12 @@ func runDemo(ctx context.Context, stdout io.Writer, opts *DemoOptions) error {
 		ctx = context.Background()
 	}
 
-	run := demo.BuildSyntheticRun()
+	var run *model.ScanRun
+	if opts.Org {
+		run = demo.BuildSyntheticOrgRun()
+	} else {
+		run = demo.BuildSyntheticRun()
+	}
 	dbPath := ""
 	htmlPath := ""
 

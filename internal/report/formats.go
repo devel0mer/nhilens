@@ -101,13 +101,37 @@ func WriteMarkdown(w io.Writer, run *model.ScanRun) error {
 	}
 	_, _ = fmt.Fprintln(w)
 
+	if s.IsMultiAccount && len(s.Accounts) > 0 {
+		_, _ = fmt.Fprintf(w, "## Account Breakdown\n\n")
+		_, _ = fmt.Fprintln(w, "| Account ID | Name | Status | Identities | Likely AI Agents | Findings (Crit / High) | SCPs |")
+		_, _ = fmt.Fprintln(w, "|---|---|---|---|---|---|---|")
+		for _, a := range s.Accounts {
+			name := a.AccountName
+			if name == "" {
+				name = "-"
+			}
+			findingCol := fmt.Sprintf("%d (%d / %d)", a.FindingsTotal, a.CriticalCount, a.HighCount)
+			if a.Status == "failed" {
+				findingCol = "failed: " + a.Error
+			}
+			_, _ = fmt.Fprintf(w, "| `%s` | %s | `%s` | %d | %d | %s | %d |\n",
+				a.AccountID, name, a.Status, a.Identities, a.AgentLikely, findingCol, a.SCPCount)
+		}
+		_, _ = fmt.Fprintln(w)
+	}
+
 	_, _ = fmt.Fprintf(w, "## Top Risky Identities (%d risky of %d total)\n\n", len(data.TopRisky), s.TotalIdentities)
 	if len(data.TopRisky) == 0 {
 		_, _ = fmt.Fprintln(w, "No risky findings recorded in this scan.")
 		_, _ = fmt.Fprintln(w)
 	} else {
-		_, _ = fmt.Fprintln(w, "| Score | Type | Identity | Agent | AI Services | Owner | Findings |")
-		_, _ = fmt.Fprintln(w, "|---|---|---|---|---|---|---|")
+		if s.IsMultiAccount {
+			_, _ = fmt.Fprintln(w, "| Score | Account | Type | Identity | Agent | AI Services | Owner | Findings |")
+			_, _ = fmt.Fprintln(w, "|---|---|---|---|---|---|---|---|")
+		} else {
+			_, _ = fmt.Fprintln(w, "| Score | Type | Identity | Agent | AI Services | Owner | Findings |")
+			_, _ = fmt.Fprintln(w, "|---|---|---|---|---|---|---|")
+		}
 		for _, id := range data.TopRisky {
 			owner := "<none>"
 			if id.Owner != nil && strings.TrimSpace(*id.Owner) != "" {
@@ -121,8 +145,17 @@ func WriteMarkdown(w io.Writer, run *model.ScanRun) error {
 			for _, f := range id.Findings {
 				fList = append(fList, fmt.Sprintf("`%s`(%s)", f.RuleID, f.Severity))
 			}
-			_, _ = fmt.Fprintf(w, "| **%.1f/10** (raw %.1f) | %s | `%s` | %s | %s | `%s` | %s |\n",
-				id.RiskScore, id.RawRiskPoints, id.Type, id.Name, id.AgentLikelihood, aiSvc, owner, strings.Join(fList, ", "))
+			if s.IsMultiAccount {
+				acctCol := "`" + id.Account + "`"
+				if id.AccountName != "" {
+					acctCol = fmt.Sprintf("%s (`%s`)", id.AccountName, id.Account)
+				}
+				_, _ = fmt.Fprintf(w, "| **%.1f/10** (raw %.1f) | %s | %s | `%s` | %s | %s | `%s` | %s |\n",
+					id.RiskScore, id.RawRiskPoints, acctCol, id.Type, id.Name, id.AgentLikelihood, aiSvc, owner, strings.Join(fList, ", "))
+			} else {
+				_, _ = fmt.Fprintf(w, "| **%.1f/10** (raw %.1f) | %s | `%s` | %s | %s | `%s` | %s |\n",
+					id.RiskScore, id.RawRiskPoints, id.Type, id.Name, id.AgentLikelihood, aiSvc, owner, strings.Join(fList, ", "))
+			}
 		}
 		_, _ = fmt.Fprintln(w)
 	}
@@ -188,8 +221,12 @@ func WriteCSV(w io.Writer, run *model.ScanRun) error {
 		aiServices := strings.Join(id.AIServices, "; ")
 
 		for _, f := range id.Findings {
+			acctID := id.Account
+			if acctID == "" {
+				acctID = run.AccountID
+			}
 			row := []string{
-				run.AccountID,
+				acctID,
 				run.Region,
 				run.ID,
 				string(id.Type),

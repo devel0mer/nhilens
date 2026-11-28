@@ -49,8 +49,22 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 		sevCounts[model.SeverityInfo]
 
 	regions := run.EffectiveRegions()
+	accounts := run.EffectiveAccounts()
+	isMultiAcct := run.IsMultiAccount()
+
 	_, _ = fmt.Fprintf(w, "nhilens scan summary\n")
-	if len(regions) > 1 {
+	if isMultiAcct {
+		if run.OrganizationID != "" {
+			_, _ = fmt.Fprintf(w, "  Org:        %s (%d account(s))\n", run.OrganizationID, len(accounts))
+		} else {
+			_, _ = fmt.Fprintf(w, "  Accounts:   %d targeted\n", len(accounts))
+		}
+		if len(regions) > 1 {
+			_, _ = fmt.Fprintf(w, "  Regions:    %s\n", strings.Join(regions, ", "))
+		} else {
+			_, _ = fmt.Fprintf(w, "  Region:     %s\n", run.Region)
+		}
+	} else if len(regions) > 1 {
 		_, _ = fmt.Fprintf(w, "  Account:    %s (regions: %s)\n", run.AccountID, strings.Join(regions, ", "))
 	} else {
 		_, _ = fmt.Fprintf(w, "  Account:    %s (region: %s)\n", run.AccountID, run.Region)
@@ -95,6 +109,29 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 	}
 	_, _ = fmt.Fprintln(w)
 
+	if isMultiAcct && len(accounts) > 0 {
+		_, _ = fmt.Fprintln(w, "Account breakdown:")
+		atw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
+		_, _ = fmt.Fprintln(atw, "ACCOUNT\tNAME\tSTATUS\tIDENTITIES\tAI AGENTS\tFINDINGS\tSCPS")
+		_, _ = fmt.Fprintln(atw, "-------\t----\t------\t----------\t---------\t--------\t----")
+		for _, a := range accounts {
+			acctName := a.AccountName
+			if acctName == "" {
+				acctName = "-"
+			}
+			findingsSummary := fmt.Sprintf("%d (crit:%d high:%d)", a.FindingsTotal, a.CriticalCount, a.HighCount)
+			if a.Status == "failed" {
+				findingsSummary = "error: " + a.Error
+			}
+			_, _ = fmt.Fprintf(atw, "%s\t%s\t%s\t%d\t%d\t%s\t%d\n",
+				a.AccountID, acctName, a.Status, a.Identities, a.AgentLikely, findingsSummary, a.SCPCount)
+		}
+		if err := atw.Flush(); err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(w)
+	}
+
 	if len(run.Identities) == 0 {
 		_, _ = fmt.Fprintln(w, "No identities found.")
 		writeCloudTrailScopeNotice(w, run)
@@ -102,8 +139,13 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "SCORE\tTYPE\tNAME\tAGENT\tOWNER\tFINDINGS\tBREAKDOWN")
-	_, _ = fmt.Fprintln(tw, "-----\t----\t----\t-----\t-----\t--------\t---------")
+	if isMultiAcct {
+		_, _ = fmt.Fprintln(tw, "SCORE\tACCOUNT\tTYPE\tNAME\tAGENT\tOWNER\tFINDINGS\tBREAKDOWN")
+		_, _ = fmt.Fprintln(tw, "-----\t-------\t----\t----\t-----\t-----\t--------\t---------")
+	} else {
+		_, _ = fmt.Fprintln(tw, "SCORE\tTYPE\tNAME\tAGENT\tOWNER\tFINDINGS\tBREAKDOWN")
+		_, _ = fmt.Fprintln(tw, "-----\t----\t----\t-----\t-----\t--------\t---------")
+	}
 
 	for _, id := range run.Identities {
 		name := id.Name
@@ -128,15 +170,32 @@ func WriteScanTable(w io.Writer, run *model.ScanRun, dbPath string) error {
 			}
 		}
 
-		_, _ = fmt.Fprintf(tw, "%.1f/10\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			id.RiskScore,
-			id.Type,
-			name,
-			agentCol,
-			owner,
-			findingsCol,
-			breakdownCol,
-		)
+		if isMultiAcct {
+			acctCol := id.Account
+			if id.AccountName != "" {
+				acctCol = fmt.Sprintf("%s (%s)", id.AccountName, id.Account)
+			}
+			_, _ = fmt.Fprintf(tw, "%.1f/10\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				id.RiskScore,
+				acctCol,
+				id.Type,
+				name,
+				agentCol,
+				owner,
+				findingsCol,
+				breakdownCol,
+			)
+		} else {
+			_, _ = fmt.Fprintf(tw, "%.1f/10\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				id.RiskScore,
+				id.Type,
+				name,
+				agentCol,
+				owner,
+				findingsCol,
+				breakdownCol,
+			)
+		}
 	}
 	if err := tw.Flush(); err != nil {
 		return err
@@ -222,6 +281,9 @@ func formatCoverageLine(cov *model.ScanCoverage) string {
 		status = "COMPLETE"
 	}
 	var details []string
+	if cov.AccountsScanned > 0 || cov.AccountsFailed > 0 {
+		details = append(details, fmt.Sprintf("accounts %d ok/%d failed", cov.AccountsScanned, cov.AccountsFailed))
+	}
 	if cov.LoginProfileChecked > 0 {
 		okCount := cov.LoginProfileChecked - cov.LoginProfileFailed
 		details = append(details, fmt.Sprintf("login_profile %d/%d ok", okCount, cov.LoginProfileChecked))

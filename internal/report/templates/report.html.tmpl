@@ -235,7 +235,7 @@
   <h1>nhilens — AWS Non-Human Identity &amp; AI Agent Audit Report</h1>
   <div class="tagline">Which AI agents and non-human identities are running in your AWS account — and what can they do?</div>
   <div class="subtitle">
-    Account <span class="mono">{{.Report.Summary.AccountID}}</span> &middot;
+    {{if .Report.Summary.IsMultiAccount}}{{if .Report.Summary.OrganizationID}}Org <span class="mono">{{.Report.Summary.OrganizationID}}</span> &middot; {{end}}<strong>{{len .Report.Summary.Accounts}} accounts</strong>{{else}}Account <span class="mono">{{.Report.Summary.AccountID}}</span>{{end}} &middot;
     {{if gt (len .Report.Summary.Regions) 1}}Regions <span class="mono">{{join .Report.Summary.Regions ", "}}</span>{{else}}Region <span class="mono">{{.Report.Summary.Region}}</span>{{end}} &middot;
     Scan <span class="mono">{{.Report.Summary.ScanID}}</span> &middot;
     Scanned {{fmtTime .Report.Summary.StartedAt}}
@@ -249,6 +249,13 @@
 
   <h2>Summary</h2>
   <div class="cards">
+    {{if .Report.Summary.IsMultiAccount}}
+    <div class="card">
+      <div class="label">AWS Accounts</div>
+      <div class="value">{{.Report.Summary.AccountsScanned}} <span style="font-size:14px;font-weight:500;">scanned</span></div>
+      <div class="sub">{{if gt .Report.Summary.AccountsFailed 0}}<strong>{{.Report.Summary.AccountsFailed}} failed</strong> &middot; {{end}}{{if .Report.Summary.OrganizationID}}Org {{.Report.Summary.OrganizationID}}{{else}}Multi-account rollup{{end}}</div>
+    </div>
+    {{end}}
     <div class="card">
       <div class="label">Total Identities</div>
       <div class="value">{{.Report.Summary.TotalIdentities}}</div>
@@ -304,11 +311,56 @@
   </div>
   {{end}}
 
+  {{if and .Report.Summary.IsMultiAccount .Report.Summary.Accounts}}
+  <h2>Account Breakdown</h2>
+  <div class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Account ID</th>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Identities</th>
+          <th>Likely AI Agents</th>
+          <th>Findings</th>
+          <th>Org SCPs</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Report.Summary.Accounts}}
+        <tr>
+          <td class="mono"><strong>{{.AccountID}}</strong></td>
+          <td>{{if .AccountName}}{{.AccountName}}{{else}}<span class="muted">-</span>{{end}}</td>
+          <td>
+            <span class="badge {{if eq .Status "failed"}}sev-critical{{else if eq .Status "partial"}}sev-medium{{else}}sev-clean{{end}}">{{.Status}}</span>
+            {{if .Error}}<div class="muted" style="margin-top:3px;">{{.Error}}</div>{{end}}
+          </td>
+          <td>{{.Identities}}</td>
+          <td>{{.AgentLikely}}</td>
+          <td>{{.FindingsTotal}} <span class="muted">({{.CriticalCount}} crit &middot; {{.HighCount}} high)</span></td>
+          <td>{{.SCPCount}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
+
   <h2>Top Risky Identities <span class="muted" style="font-size:13.5px;font-weight:400;">({{len .Report.TopRisky}} risky of {{.Report.Summary.TotalIdentities}} total{{if eq (len .Report.TopRisky) 10}} &middot; top 10 shown{{end}})</span></h2>
   <div class="panel">
     {{if .Report.TopRisky}}
     <div class="graph-toolbar" id="table-filters">
       <input id="tbl-search" type="search" placeholder="Search name, ARN, owner, rule, AI service...">
+      {{if .Report.Summary.IsMultiAccount}}
+      <label>Account:
+        <select id="tbl-account">
+          <option value="all" selected>All accounts</option>
+          {{range .Report.Summary.Accounts}}
+          <option value="{{.AccountID}}">{{if .AccountName}}{{.AccountName}} ({{.AccountID}}){{else}}{{.AccountID}}{{end}}</option>
+          {{end}}
+        </select>
+      </label>
+      {{end}}
       <label>Type:
         <select id="tbl-type">
           <option value="all" selected>All types</option>
@@ -350,13 +402,14 @@
       </thead>
       <tbody>
         {{range .Report.TopRisky}}
-        <tr class="risky-row" data-type="{{.Type}}" data-agent="{{.AgentLikelihood}}" data-sev="{{maxSev .Findings}}">
+        <tr class="risky-row" data-account="{{.Account}}" data-type="{{.Type}}" data-agent="{{.AgentLikelihood}}" data-sev="{{maxSev .Findings}}">
           <td>
             <span class="badge {{riskClass .RiskScore}}">{{scoreFmt .RiskScore}} / 10</span>
             {{if gt .RawRiskPoints 0.0}}<div class="muted mono" style="margin-top:4px;">raw {{scoreFmt .RawRiskPoints}}</div>{{end}}
           </td>
           <td>
             <div><strong>{{.Name}}</strong> <span class="badge sev-info">{{.Type}}</span>{{if eq .CoverageStatus "partial"}} <span class="badge sev-medium" title="Partial enrichment data">partial</span>{{end}}</div>
+            {{if $.Report.Summary.IsMultiAccount}}<div class="muted" style="margin-top:2px;"><span class="badge sev-info mono">{{if .AccountName}}{{.AccountName}} &middot; {{end}}{{.Account}}</span></div>{{end}}
             <div class="mono muted arn">{{.ARN}}</div>
             {{if .DataGaps}}<div class="muted">Coverage gaps: <span class="mono">{{join .DataGaps ", "}}</span></div>{{end}}
             {{if .AIServices}}<div class="muted">AI services: <span class="mono">{{join .AIServices ", "}}</span></div>{{end}}
@@ -498,7 +551,7 @@
           {{range .Items}}
           <tr>
             <td>
-              <strong>{{.IdentityName}}</strong> <span class="badge sev-info">{{.IdentityType}}</span>
+              <strong>{{.IdentityName}}</strong> <span class="badge sev-info">{{.IdentityType}}</span>{{if $.Report.Summary.IsMultiAccount}} <span class="badge sev-info mono">{{if .AccountName}}{{.AccountName}} &middot; {{end}}{{.Account}}</span>{{end}}
               <div class="mono muted">{{.IdentityARN}}</div>
             </td>
             <td><span class="badge {{sevClass .Severity}}">{{.Severity}}</span></td>
@@ -713,6 +766,7 @@
     var rows = Array.prototype.slice.call(document.querySelectorAll("#risky-table tbody tr.risky-row"));
     if (rows.length === 0) { return; }
     var searchEl = document.getElementById("tbl-search");
+    var accountEl = document.getElementById("tbl-account");
     var typeEl = document.getElementById("tbl-type");
     var agentEl = document.getElementById("tbl-agent");
     var sevEl = document.getElementById("tbl-sev");
@@ -721,17 +775,19 @@
 
     function filterTable() {
       var q = (searchEl.value || "").trim().toLowerCase();
+      var wantAccount = accountEl ? accountEl.value : "all";
       var wantType = typeEl.value;
       var wantAgent = agentEl.value;
       var wantSev = sevEl.value;
       var visible = 0;
 
       rows.forEach(function (tr) {
+        var okAccount = wantAccount === "all" || tr.getAttribute("data-account") === wantAccount;
         var okType = wantType === "all" || tr.getAttribute("data-type") === wantType;
         var okAgent = wantAgent === "all" || tr.getAttribute("data-agent") === wantAgent;
         var okSev = wantSev === "all" || tr.getAttribute("data-sev") === wantSev;
         var okQ = !q || (tr.textContent || "").toLowerCase().indexOf(q) !== -1;
-        var show = okType && okAgent && okSev && okQ;
+        var show = okAccount && okType && okAgent && okSev && okQ;
         tr.style.display = show ? "" : "none";
         if (show) { visible++; }
       });
@@ -741,11 +797,13 @@
     }
 
     searchEl.addEventListener("input", filterTable);
+    if (accountEl) { accountEl.addEventListener("change", filterTable); }
     typeEl.addEventListener("change", filterTable);
     agentEl.addEventListener("change", filterTable);
     sevEl.addEventListener("change", filterTable);
     resetEl.addEventListener("click", function () {
       searchEl.value = "";
+      if (accountEl) { accountEl.value = "all"; }
       typeEl.value = "all";
       agentEl.value = "all";
       sevEl.value = "all";

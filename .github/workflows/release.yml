@@ -98,4 +98,5 @@ jobs:
           tar -xzf nhilens_*_linux_amd64.tar.gz
           ./nhilens version
           ./nhilens demo --no-write | head -n 10
+          ./nhilens demo --org --no-write | head -n 15
           ./nhilens explain R6 | head -n 10

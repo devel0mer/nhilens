@@ -2,48 +2,52 @@
 
 **Which AI agents and non-human identities are running in your AWS account — and what can they do?**
 
-List every AI agent, bot, IAM role, and static access key in an AWS account, flag the unowned and over-privileged ones, and see exactly why they're risky — strictly read-only, single static Go binary, zero telemetry.
+List every AI agent, bot, IAM role, and static access key across one AWS account or your entire **AWS Organization**, flag the unowned and over-privileged ones, and see exactly why they're risky — strictly read-only, single static Go binary, zero telemetry.
 
-![nhilens example audit report showing unowned AI agents, matched heuristic signals, and risk findings](docs/assets/finding-example.png)
+![nhilens AWS Organizations & multi-region audit report showing Account Breakdown, matched AI agent signals, and risk findings](docs/assets/org-report-example.png)
 
-*(Synthetic 12-identity output from `nhilens demo` — open [docs/sample-report.html](docs/sample-report.html) in any browser for the full offline interactive report.)*
+*(Synthetic 3-account, 2-region output from `nhilens demo --org` — open [docs/sample-report.html](docs/sample-report.html) in any browser for an interactive offline report.)*
 
 ---
 
 ## Try in 60 Seconds (No AWS Credentials Needed)
 
-Run the full classification, risk scoring, and offline HTML report pipeline on a realistic synthetic AWS account (`111122223333`) with **zero AWS API calls**:
+Run the full classification, risk scoring, and offline HTML report pipeline on a realistic synthetic AWS account — or a 3-account, 2-region synthetic AWS Organization — with **zero AWS API calls**:
 
 ```bash
 # macOS / Linux (Homebrew)
 brew install devel0mer/tap/nhilens
-nhilens demo
+nhilens demo         # single-account demo (12 identities)
+nhilens demo --org   # 3-account, 2-region AWS Organizations rollup demo
 ```
 
 No Homebrew? Download a pre-built static binary (`linux`, `darwin`, `windows` × `amd64`, `arm64`) from [GitHub Releases](https://github.com/devel0mer/nhilens/releases/latest) — zero runtime dependencies, no Go toolchain required:
 
 ```bash
 # Example: macOS Apple Silicon (replace archive name for Linux/Intel/Windows)
-curl -fsSL https://github.com/devel0mer/nhilens/releases/download/v0.2.1/nhilens_0.2.1_darwin_arm64.tar.gz | tar -xz nhilens
-./nhilens demo
+curl -fsSL https://github.com/devel0mer/nhilens/releases/download/v0.3.0/nhilens_0.3.0_darwin_arm64.tar.gz | tar -xz nhilens
+./nhilens demo --org
 ```
 
-`nhilens demo` prints a ranked risk table and writes a self-contained offline report to `./nhilens-demo/report.html` (plus `./nhilens-demo/nhilens.db`).
+This prints a ranked table and writes a self-contained offline report to `./nhilens-demo/report.html` (plus `./nhilens-demo/nhilens.db`).
 
 ---
 
-## Scan Your Own AWS Account (Strictly Read-Only)
+## Scan Your Own AWS Account or Organization (Strictly Read-Only)
 
-Attach only the minimal 8-action read-only policy in [docs/iam-policy.json](docs/iam-policy.json) (`sts:GetCallerIdentity`, IAM read/Access Advisor, `cloudtrail:LookupEvents`). `nhilens` never calls any mutating AWS API and makes zero telemetry calls.
+For a single account, attach only the minimal 8-action read-only policy in [docs/iam-policy.json](docs/iam-policy.json). For multi-account AWS Organizations scans, use the strictly read-only [docs/iam-policy-org.json](docs/iam-policy-org.json). `nhilens` never calls any mutating AWS API and makes zero telemetry calls.
 
 ```bash
-# 1. Scan an account, persist to SQLite, and print a ranked table
-nhilens scan --profile sandbox --region us-east-1 --since 90d --out ./nhilens-out
+# Single account + multi-region CloudTrail aggregation
+nhilens scan --profile sandbox --regions us-east-1,eu-west-1 --since 90d --out ./nhilens-out
 
-# 2. Generate a standalone offline HTML report with interactive trust & policy graph
-nhilens report --in ./nhilens-out/nhilens.db --out ./nhilens-out/report.html
+# Entire AWS Organization (auto-discovers ACTIVE accounts & effective OU/Root SCPs)
+nhilens scan --org --assume-role-name nhilens-readonly --regions us-east-1,eu-west-1 --out ./org-out
 
-# 3. Inspect any risk rule with AWS CLI / Terraform remediation snippets
+# Generate a standalone offline HTML report with Account Breakdown & trust/policy graph
+nhilens report --in ./org-out/nhilens.db --out ./org-out/report.html
+
+# Inspect any risk rule with AWS CLI / Terraform remediation snippets
 nhilens explain R6
 ```
 
@@ -56,7 +60,7 @@ nhilens explain R6
 - **Pre-built binaries (recommended — no Go required):** Download from [GitHub Releases](https://github.com/devel0mer/nhilens/releases/latest) (`linux`, `darwin`, `windows` × `amd64`, `arm64`; shipped with SHA-256 checksums, CycloneDX SBOMs, keyless Cosign signatures, and SLSA provenance — [verification instructions](docs/usage.md#verifying-release-supply-chain-cosign-sha-256-sbom-slsa)).
 - **Homebrew (macOS & Linux):** `brew install devel0mer/tap/nhilens`
 - **Scoop (Windows):** `scoop bucket add devel0mer https://github.com/devel0mer/scoop-bucket && scoop install devel0mer/nhilens`
-- **Docker (GHCR — distroless, non-root, multi-arch):** `docker run --rm ghcr.io/devel0mer/nhilens:latest demo --no-write`
+- **Docker (GHCR — distroless, non-root, multi-arch):** `docker run --rm ghcr.io/devel0mer/nhilens:latest demo --org --no-write`
 - **From source (requires Go 1.26+):** `CGO_ENABLED=0 go install github.com/devel0mer/nhilens/cmd/nhilens@latest`
 
 ---
@@ -65,29 +69,27 @@ nhilens explain R6
 
 | Tool | Primary Strength | Where `nhilens` Fits |
 |---|---|---|
-| **Prowler / ScoutSuite** | Broad multi-service cloud posture & CIS/compliance benchmarks | Use those for account-wide compliance; use `nhilens` to inventory non-human/AI identities, surface ownership gaps, and rank AI-capable roles |
-| **Cloudsplaining** | Deep per-action IAM policy analysis | Use Cloudsplaining for exhaustive policy action triage; use `nhilens` to correlate policies, AI service usage, trusts, Access Advisor, and CloudTrail per identity |
-| **PMapper** | Graph-based multi-hop IAM privilege escalation path solving | Use PMapper for transitive escalation graphs; use `nhilens` for fast, zero-dependency, offline snapshots centered on AI-agent ownership and blast radius |
+| **Prowler / ScoutSuite** | Broad multi-service cloud posture & CIS/compliance benchmarks | Use those for account-wide compliance; use `nhilens` to inventory non-human/AI identities, surface ownership gaps, and rank AI-capable roles across accounts |
+| **Cloudsplaining** | Deep per-action IAM policy analysis | Use Cloudsplaining for exhaustive policy action triage; use `nhilens` to correlate policies, effective SCPs, AI service usage, trusts, Access Advisor, and multi-region CloudTrail per identity |
+| **PMapper** | Graph-based multi-hop IAM privilege escalation path solving | Use PMapper for transitive escalation graphs; use `nhilens` for fast, zero-dependency, offline org snapshots centered on AI-agent ownership and blast radius |
 
 ## What It Checks
 
-- **Honest AI agent vs. automation heuristics**: Scores 7 configurable signals (tags, names, service/OIDC trusts, programmatic keys, AI/LLM permissions & runtime calls like `bedrock`/`sagemaker`/`q`, and CloudTrail `userAgent` traces) and lists every matched signal. Generic CI/automation roles are labeled `automation` and capped at `45%` (`possible`) so ordinary CI bots do not false-positive as `likely` AI agents.
-- **8 built-in risk rules (`R1–R8`)**: Wildcard admin (`R1`), unused permissions (`R2`), missing owner (`R3`), stale/multi-IP shared keys (`R4`), loose cross-account/OIDC trusts (`R5`), privilege escalation paths (`R6`), sensitive service wildcards (`R7`), and key hygiene (`R8`) — intersecting explicit Denies, IAM permissions boundaries, and optional `--scp-file` SCPs. See [docs/rules.md](docs/rules.md).
-- **Built for CI & drift tracking**: Local SQLite history (`nhilens diff --fail-on-new high`), SARIF 2.1.0 for GitHub Code Scanning, `.nhilens-ignore.yaml` time-bounded waivers, and offline HTML/JSON/Markdown/CSV reports. Full CLI flags, multi-account profile loop, and config docs live in [docs/usage.md](docs/usage.md).
+- **Multi-account & multi-region (`v0.3`)**: Discovers all `ACTIVE` accounts via `--org` (or explicit `--accounts`), assumes a read-only audit role concurrently, auto-loads effective Root/OU/Account SCPs with AWS's exact within-level union & across-level intersection semantics, and aggregates CloudTrail events in parallel across `--regions` (or `--regions all`) with `EventId` deduplication.
+- **Honest AI agent vs. automation heuristics**: Scores 7 configurable signals (tags, names, service/OIDC trusts, programmatic keys, AI/LLM permissions & runtime calls like `bedrock`/`sagemaker`/`q`, and CloudTrail `userAgent` traces) and lists every matched signal. Generic ECS/CI automation roles are labeled `automation` and capped at `45%` (`possible`) so ordinary workloads do not false-positive as `likely` AI agents.
+- **8 built-in risk rules (`R1–R8`)**: Wildcard admin (`R1`), unused permissions (`R2`), missing owner (`R3`), stale/cross-region shared keys (`R4`), loose cross-account/OIDC trusts (`R5`), privilege escalation paths (`R6`), sensitive service wildcards (`R7`), and key hygiene (`R8`) — intersecting explicit Denies, IAM permissions boundaries, and Organizations SCPs. See [docs/rules.md](docs/rules.md).
+- **Built for CI & drift tracking**: Local SQLite history (`nhilens diff --fail-on-new high`), SARIF 2.1.0 for GitHub Code Scanning, `.nhilens-ignore.yaml` time-bounded waivers, and offline HTML/JSON/Markdown/CSV reports. Full CLI flags, Org setup, and config docs live in [docs/usage.md](docs/usage.md).
 
 ---
 
 ## Roadmap
 
-### `v0.3` (Next) — Multi-Account & Multi-Region
-- **Native AWS Organizations scanning**: Built-in `organizations:ListAccounts` + read-only cross-account `AssumeRole` orchestration, org-wide rollup reports, and automatic SCP discovery (eliminating the manual `--scp-file` and shell profile loop).
-- **Multi-region CloudTrail aggregation**: Fan-out across active regions (`--regions` / all enabled regions) so `userAgent` traces, 30d activity, and R4 multi-IP access keys are correlated account-wide in a single scan.
+### `v0.4` (Next) — Deeper AI-Agent Attribution
+- **Deterministic AI-agent registry discovery**: Optional read-only queries (`bedrock-agent:ListAgents`, `sagemaker:ListEndpoints`) to tie roles directly to active AI workloads alongside shadow-agent heuristics.
+- **Behavioral CloudTrail correlation**: Session-level LLM + tool-call sequence signals and log-odds scoring with negative evidence to cut false positives further.
 
 ### Exploring (Open an Issue to Upvote)
-- **Expanded AI-agent & MCP signals**: Deterministic Bedrock/SageMaker agent registry discovery, Bedrock AgentCore / Strands profiles, and cross-account tool-invocation patterns.
-- **Additional clouds**: GCP (Service Accounts, Workload Identity Federation, Vertex AI) and Azure (Entra ID Managed Identities, App Registrations, Azure AI) — open or upvote an issue to help prioritize which cloud comes first after `v0.3`.
-
-*(Need multi-account scans today? See the [temporary profile-loop recipe](docs/usage.md#scanning-multiple-accounts--regions-temporary-profile-loop).)*
+- **Additional clouds**: GCP (Service Accounts, Workload Identity Federation, Vertex AI) and Azure (Entra ID Managed Identities, App Registrations, Azure AI) — open or upvote an issue to help prioritize which cloud comes next.
 
 ---
 
@@ -95,8 +97,8 @@ nhilens explain R6
 
 > **Review before sharing:** `nhilens.db` (created `0600`) and generated reports contain AWS account IDs, IAM ARNs, tags, policy metadata, and best-effort CloudTrail source IPs. Keep scan outputs out of version control and redact before sharing.
 
-- **Single account & single-region CloudTrail (`v0.2.x`)**: `cloudtrail:LookupEvents` inspects `--region` only (up to 90 days of management events). Every CLI, HTML, Markdown, and SARIF output displays an explicit regional scope notice and structured scan `coverage` so partial data or regional limits are never mistaken for zero risk.
-- **Effective permissions scope**: Evaluates attached managed, inline, and group policies intersected with explicit Denies, IAM permissions boundaries, and optional `--scp-file` SCPs. Resource-based policies (e.g., S3/KMS) and STS session policies are not evaluated.
+- **CloudTrail scope & windows**: `cloudtrail:LookupEvents` covers up to 90 days of management events per queried region (use `--regions` or `--regions all` for multi-region aggregation). Every CLI, HTML, Markdown, and SARIF output explicitly lists queried regions, failed accounts/regions, and structured scan `coverage` so partial data is never mistaken for zero risk.
+- **Effective permissions scope**: Evaluates attached managed, inline, and group policies intersected with explicit Denies, IAM permissions boundaries, and AWS Organizations SCPs (auto-discovered in `--org` mode or via `--scp-file`). Resource-based policies (e.g., S3/KMS) and STS session policies are not evaluated.
 - **Service-linked roles**: AWS-managed `/aws-service-role/` roles are inventoried but excluded from findings by default.
 - **Non-goals**: Credential brokering/issuing, auto-remediation, web servers, or telemetry backends.
 

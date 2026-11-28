@@ -317,6 +317,13 @@ func buildIdentityNodeDetails(ident model.Identity, owner string) []string {
 		fmt.Sprintf("Agent likelihood (heuristic): %s", agentLabel),
 		fmt.Sprintf("Owner: %s", owner),
 	}
+	if ident.Account != "" {
+		acctLine := fmt.Sprintf("Account: %s", ident.Account)
+		if ident.AccountName != "" {
+			acctLine = fmt.Sprintf("Account: %s (%s)", ident.AccountName, ident.Account)
+		}
+		details = append([]string{acctLine}, details...)
+	}
 	if ident.ScoreExplanation != "" {
 		details = append(details, "Why this score: "+ident.ScoreExplanation)
 	}

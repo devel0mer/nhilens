@@ -25,30 +25,35 @@ var reportHTMLTemplate string
 
 // SummaryStats holds high-level KPI metrics displayed at the top of the report.
 type SummaryStats struct {
-	ScanID               string    `json:"scan_id"`
-	AccountID            string    `json:"account_id"`
-	CallerARN            string    `json:"caller_arn"`
-	Region               string    `json:"region"`
-	Regions              []string  `json:"regions,omitempty"`
-	Profile              string    `json:"profile,omitempty"`
-	StartedAt            time.Time `json:"started_at"`
-	CompletedAt          time.Time `json:"completed_at"`
-	SinceWindow          string    `json:"since_window"`
-	TotalIdentities      int       `json:"total_identities"`
-	Roles                int       `json:"roles"`
-	Users                int       `json:"users"`
-	Keys                 int       `json:"keys"`
-	ServiceLinkedRoles   int       `json:"service_linked_roles"`
-	AgentLikely          int       `json:"agent_likely"`
-	AgentPossible        int       `json:"agent_possible"`
-	UnownedNonHuman      int       `json:"unowned_non_human"`
-	TotalFindings        int       `json:"total_findings"`
-	CriticalFindings     int       `json:"critical_findings"`
-	HighFindings         int       `json:"high_findings"`
-	MediumFindings       int       `json:"medium_findings"`
-	LowFindings          int       `json:"low_findings"`
-	CloudTrailStatus     string    `json:"cloudtrail_status"`
-	CloudTrailEventCount int       `json:"cloudtrail_event_count"`
+	ScanID               string                     `json:"scan_id"`
+	AccountID            string                     `json:"account_id"`
+	OrganizationID       string                     `json:"organization_id,omitempty"`
+	IsMultiAccount       bool                       `json:"is_multi_account,omitempty"`
+	Accounts             []model.AccountScanSummary `json:"accounts,omitempty"`
+	AccountsScanned      int                        `json:"accounts_scanned,omitempty"`
+	AccountsFailed       int                        `json:"accounts_failed,omitempty"`
+	CallerARN            string                     `json:"caller_arn"`
+	Region               string                     `json:"region"`
+	Regions              []string                   `json:"regions,omitempty"`
+	Profile              string                     `json:"profile,omitempty"`
+	StartedAt            time.Time                  `json:"started_at"`
+	CompletedAt          time.Time                  `json:"completed_at"`
+	SinceWindow          string                     `json:"since_window"`
+	TotalIdentities      int                        `json:"total_identities"`
+	Roles                int                        `json:"roles"`
+	Users                int                        `json:"users"`
+	Keys                 int                        `json:"keys"`
+	ServiceLinkedRoles   int                        `json:"service_linked_roles"`
+	AgentLikely          int                        `json:"agent_likely"`
+	AgentPossible        int                        `json:"agent_possible"`
+	UnownedNonHuman      int                        `json:"unowned_non_human"`
+	TotalFindings        int                        `json:"total_findings"`
+	CriticalFindings     int                        `json:"critical_findings"`
+	HighFindings         int                        `json:"high_findings"`
+	MediumFindings       int                        `json:"medium_findings"`
+	LowFindings          int                        `json:"low_findings"`
+	CloudTrailStatus     string                     `json:"cloudtrail_status"`
+	CloudTrailEventCount int                        `json:"cloudtrail_event_count"`
 }
 
 // RuleGroup aggregates findings across identities for one rule (R1..R5).
@@ -68,6 +73,8 @@ type RuleFindingItem struct {
 	IdentityARN     string                `json:"identity_arn"`
 	IdentityName    string                `json:"identity_name"`
 	IdentityType    model.IdentityType    `json:"identity_type"`
+	Account         string                `json:"account,omitempty"`
+	AccountName     string                `json:"account_name,omitempty"`
 	AgentLikelihood model.AgentLikelihood `json:"agent_likelihood"`
 	RiskScore       float64               `json:"risk_score"`
 	Severity        model.Severity        `json:"severity"`
@@ -190,9 +197,27 @@ func Build(run *model.ScanRun, generatedAt time.Time) *ReportData {
 	}
 
 	sevCounts := score.SummarizeSeverities(run.Identities)
+	effAccounts := run.EffectiveAccounts()
+	acctScanned, acctFailed := 0, 0
+	for _, a := range effAccounts {
+		if a.Status == "failed" {
+			acctFailed++
+		} else {
+			acctScanned++
+		}
+	}
+	orgID := run.OrganizationID
+	if orgID == "" && run.Coverage != nil {
+		orgID = run.Coverage.OrganizationID
+	}
 	summary := SummaryStats{
 		ScanID:               run.ID,
 		AccountID:            run.AccountID,
+		OrganizationID:       orgID,
+		IsMultiAccount:       run.IsMultiAccount(),
+		Accounts:             effAccounts,
+		AccountsScanned:      acctScanned,
+		AccountsFailed:       acctFailed,
 		CallerARN:            run.CallerARN,
 		Region:               run.Region,
 		Regions:              run.EffectiveRegions(),
@@ -405,6 +430,8 @@ func buildRuleGroups(ranked []model.Identity) []RuleGroup {
 				IdentityARN:     ident.ARN,
 				IdentityName:    ident.Name,
 				IdentityType:    ident.Type,
+				Account:         ident.Account,
+				AccountName:     ident.AccountName,
 				AgentLikelihood: ident.AgentLikelihood,
 				RiskScore:       ident.RiskScore,
 				Severity:        f.Severity,
@@ -472,7 +499,15 @@ func defaultLimitations(run *model.ScanRun) []Limitation {
 		},
 		{
 			Title:  "Service-linked roles & point-in-time snapshot",
-			Detail: "AWS-managed service-linked roles (/aws-service-role/) are inventoried and labeled but excluded from risk findings and unflagged graph clutter by default unless opted in. This report reflects a point-in-time read-only snapshot of a single AWS account.",
+			Detail: snapshotLimitationDetail(run),
 		},
 	}
+}
+
+func snapshotLimitationDetail(run *model.ScanRun) string {
+	base := "AWS-managed service-linked roles (/aws-service-role/) are inventoried and labeled but excluded from risk findings and unflagged graph clutter by default unless opted in. "
+	if run != nil && run.IsMultiAccount() {
+		return base + fmt.Sprintf("This report reflects a point-in-time read-only rollup snapshot across %d targeted AWS accounts.", len(run.EffectiveAccounts()))
+	}
+	return base + "This report reflects a point-in-time read-only snapshot of a single AWS account."
 }
